@@ -5,9 +5,6 @@
 # Session Data files
 .RData
 
-# User-specific files
-.Ruserdata
-
 # Example code in package build process
 *-Ex.R
 
@@ -28,12 +25,33 @@ vignettes/*.pdf
 .httr-oauth
 
 # knitr and R markdown default cache directories
-*_cache/
+/*_cache/
 /cache/
 
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
 
-# R Environment Variables
-.Renviron
+# Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
+rsconnect/
+
+*.yml
+*.docx
+*.zip
+*.mxd
+*.html
+2018/2018IR_shortVersion/
+2018/buildingBlocks/
+2018/NMC/
+2018/originalData/
+2018/processedData/
+2018/ReportVersions/
+
+2020ProbChapter/startingPointDocument/
+2020ProbChapter/originalData/
+2020ProbChapter/processedData/
+
+2022ProbChapter/startingPointDocument/
+2022ProbChapter/originalData/
+2022ProbChapter/processedData/
+2022ProbChapter/config.yml
