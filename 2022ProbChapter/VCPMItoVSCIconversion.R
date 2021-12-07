@@ -55,11 +55,18 @@ probRatio <- tribble(~`0 to 100 convesion`,	~`VSCI Score`,	~`ratio`,	~`category`
                      98,	90,	90,		'excellent' )
 
 VCPMItoVSCIconversion <- function(averageVCPMI, probRatio){
-  averageVCPMI * vlookup(averageVCPMI, probRatio, 3, range = T, larger = F)
+  # if averageVCPMI < 10 or > 90 then implement floor/ceiling
+  averageVCPMI[averageVCPMI <= 10] <- 10
+  averageVCPMI[averageVCPMI >= 90] <- 90
+  
+  averageVCPMIconversion <- averageVCPMI * vlookup(averageVCPMI, probRatio, 3, range = T, larger = F)
+  # one last fix bc 90 ratio is off
+  averageVCPMIconversion[averageVCPMIconversion >= 90] <- 90
+  return(averageVCPMIconversion)
 }
 
 # How to use function
-#madeUpVCPMI <- c(19.79, 29.92, 33.09, 16.99, 26.63, 45.15, 26.13, 37.66, 62.31, 29.03, 60.37, 77.33)
+#madeUpVCPMI <- c(19.79, 29.92, 33.09, 16.99, 26.63, 45.15, 26.13, 37.66, 62.31, 29.03, 60.37, 77.33, 90.55, 8.0, 81.05)
 #VCPMItoVSCIconversion(madeUpVCPMI, probRatio)
 
 

@@ -337,6 +337,9 @@ VCPMI65results <- pin_get("ejones/VCPMI65results", board = "rsconnect")
 Bring in correct BenSampID info for sites.
 
 ```{r}
+# x2019Sites <- filter(WQM_Stations_Filter, Year == 2019)$StationID
+# x2020Sites <- filter(WQM_Stations_Filter, Year == 2020)$StationID
+
 bioData2019 <- pin_get("ejones/benSamps", board = "rsconnect") %>% 
   filter(StationID %in% x2019Sites & year(`Collection Date`) == 2019) 
 bioData2020 <- pin_get("ejones/benSamps", board = "rsconnect") %>% 
@@ -352,7 +355,24 @@ benSamps_Filter_fin <- bind_rows(bioData2019, bioData2020) %>%
   left_join(ecoregion, by = 'StationID')
 ```
 
-Get correct 
+Grab raw benthic data so we can add in the % haptobenthos metric that isn't in basic SCI data.
+
+```{r raw benthic}
+rawBio <- pin_get("ejones/benthics", board = "rsconnect") %>% 
+  #filter(BenSampID %in% benSamps_Filter_fin$BenSampID) %>% 
+  filter(BenSampID %in% c('FAMACO4564')) %>% #'ABR3814', 'ABR3814R110')) %>% 
+  
+  # join in master taxa list to get habit info
+  left_join(pin_get('ejones/masterTaxaGenus', board = 'rsconnect') %>% 
+              dplyr::select(FinalID, FamHabit),
+            by = 'FinalID') %>% 
+  filter(FamHabit %in% c('Climber', 'Clinger')) %>% 
+  group_by(StationID, BenSampID) %>% 
+  summarise(`%Hapto` = sum(Individuals))
+```
+
+
+Get correct SCI information.
 
 ```{r}
 SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! US_L3CODE %in% c(63,65))$BenSampID) %>%
@@ -387,7 +407,20 @@ Now we can save both of these objects out and manually delete the erroneous rows
 Next we need to get the total habitat scores for each benthic sample.
 
 ```{r tot hab}
-TotHab
+habSamps <- bind_rows(pin_get('ejones/habSamps', board = 'rsconnect') %>% 
+                        filter(StationID %in% SCI_filter$StationID & year(`Collection Date`) == 2019) ,
+                      pin_get('ejones/habSamps', board = 'rsconnect') %>% 
+                        filter(StationID %in% SCI_filter$StationID & year(`Collection Date`) == 2020)) 
+# make sure this is close to nrow SCI_filter
+habValues <- pin_get('ejones/habValues', board = 'rsconnect') %>% 
+  filter(HabSampID %in% habSamps$HabSampID) %>% 
+  group_by(HabSampID) %>% 
+  summarise(TotHab = sum(HabValue))
+
+totHab <- left_join(habSamps, habValues, by = "HabSampID") %>% 
+  dplyr::select(StationID, `Collection Date`, TotHab)
+
+#write.csv(totHab, 'processedData/totHab.csv', row.names = F, na = '')
 ```
 
 
@@ -468,19 +501,44 @@ Now we need to convert the VCPMI scores to VSCI scale for analyses and make one 
 ```{r bugAvg}
 source('VCPMItoVSCIconversion.R')
 
-write.csv(filter(SCI_filter, `Collected By` %in% c("BRETT STERN", "MIKEJ SHAVER", "JUSTIND LOYD" )), 'VSCI_VCPMIreview.csv', row.names = F, na = '')
+# dataset for eastern bios to review to make sure all VSCI/VCPMI results are used correctly
+#write.csv(filter(SCI_filter, `Collected By` %in% c("BRETT STERN", "MIKEJ SHAVER", "JUSTIND LOYD" )), 'processedData/VSCI_VCPMIreview.csv', row.names = F, na = '')
 
-SCI_filterFin <- SCI_filter %>% 
-  filter(SCI != 'VSCI')
+SCI_filterAdjust <- SCI_filter %>% 
+  filter(SCI != 'VSCI') %>% 
+  mutate(VSCIVCPMI = VCPMItoVSCIconversion(`SCI Score`, probRatio))
 
 bugAvg <- SCI_filter %>% 
   group_by(StationID, Year, SCI) %>% 
-  summarise_at(vars(`Family Total Taxa`:PctIntol), mean, na.rm = TRUE) %>% 
-  dplyr::select(TotTaxa = 
-
-TotTaxa"                 "EPTTax"                 
- [66] "VEphem"                  "VPTHydropsychidae"       "VScrap"                  "VChiro"                  "V2Dom"                  
- [71] "HBI"                     "VHapto"                  "EPTInd"                  "VSCIVCPMI
+  summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:PctIntol)), mean, na.rm = TRUE) %>% 
+  mutate(VSCIVCPMI = case_when(SCI == 'VSCI' ~ `SCI Score`,
+                               SCI != 'VSCI' ~ VCPMItoVSCIconversion(`SCI Score`, probRatio),
+                               TRUE ~ as.numeric(NA))) %>% 
+  mutate(TotTaxa = `Family Total Taxa`,
+         EPTTax = `Family EPT Taxa`,
+         VEphem = `%Ephem`,
+         VPTHydropsychidae = `%PT - Hydropsychidae`,
+         VScrap = case_when(SCI == 'VSCI' ~ `%FamilyScraper`, 
+                                   SCI != 'VSCI' ~ `%Scrap`,
+                                    TRUE ~ as.numeric(NA)),
+         VChiro = case_when(SCI == 'VSCI' ~ `%Chironomidae Score`, 
+                            SCI != 'VSCI' ~ ???????,
+                             TRUE ~ as.numeric(NA)),
+         V2Dom = case_when(SCI == 'VSCI' ~ `Family %2 Dominant`, 
+                            SCI != 'VSCI' ~ ??????,
+                             TRUE ~ as.numeric(NA)),
+         HBI = `Family HBI`,
+         VHapto = ?????????
+         EPTInd = `Family EPT Taxa`)
+  
+  
+  
+  dplyr::select(StationID, Year, TotTaxa = `Family Total Taxa`, EPTTax = `Family EPT Taxa`,
+                VEphem = `%Ephem`, VPTHydropsychidae = `%PT - Hydropsychidae`,
+                VScrap = `%FamilyScraper`, VChiro = `%Chironomidae Score`, 
+                V2Dom, HBI = `Family HBI`, VHapto
+                EPTInd
+                VSCIVCPMI
 names(prob2020)
 names(bugAvg)
 ```
@@ -496,11 +554,18 @@ Bring in Field, Analyte, and Metals Data
 
 ```{r field}
 field <- read.csv('processedData/FinalFieldAnalyteMetals.csv')
+
 ```
 
 Bring in Bug data
 
 ```{r bug}
+
+```
+
+Bring in Habitat data
+
+```{r habitat}
 
 ```
 
