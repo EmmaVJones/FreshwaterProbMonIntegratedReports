@@ -337,8 +337,8 @@ VCPMI65results <- pin_get("ejones/VCPMI65results", board = "rsconnect")
 Bring in correct BenSampID info for sites.
 
 ```{r}
-# x2019Sites <- filter(WQM_Stations_Filter, Year == 2019)$StationID
-# x2020Sites <- filter(WQM_Stations_Filter, Year == 2020)$StationID
+x2019Sites <- filter(WQM_Stations_Filter, Year == 2019)$StationID
+x2020Sites <- filter(WQM_Stations_Filter, Year == 2020)$StationID
 
 bioData2019 <- pin_get("ejones/benSamps", board = "rsconnect") %>% 
   filter(StationID %in% x2019Sites & year(`Collection Date`) == 2019) 
@@ -388,6 +388,23 @@ SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! U
   mutate(Year = year(`Collection Date`)) %>% 
   dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
                 Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+  arrange(Year, StationID, `Collection Date`)
+
+
+# after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
+SCI_filter <- filter(SCI_filter, StationID != "1AXOR000.47") %>% 
+  bind_rows(
+    filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, StationID == "1AXOR000.47")$BenSampID) %>%
+  mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
+  left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
+              by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
+
+  # make year variable to make review easier
+  mutate(Year = year(`Collection Date`)) %>% 
+  dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
+                Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+  arrange(Year, StationID, `Collection Date`)
+  ) %>% 
   arrange(Year, StationID, `Collection Date`)
 
 # clean up workspace
