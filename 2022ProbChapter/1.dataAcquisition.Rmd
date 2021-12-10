@@ -150,7 +150,7 @@ multistationAnalyteData <- pool %>% tbl(in_schema("wqm", "Wqm_Analytes_View")) %
 To consistently organize field, analyte, and metals data it is prudent to use the "conventionals" data rules.
 
 ```{r conventionals organization of raw data}
-source('C:/HardDriveBackup/R/GitHub/WQMdataQueryTool/conventionalsFunction1232020.R')
+source('C:/HardDriveBackup/R/GitHub/WQMdataQueryTool/conventionalsFunction1232021.R')
 
 conventionalsList <- conventionalsSummary(conventionals= pin_get("conventionals2022IRfinalWithSecchi", board = "rsconnect")[0,],
                                           stationFieldDataUserFilter= multistationFieldData, 
@@ -251,6 +251,7 @@ probData <- conventionals2 %>%
               SpCond = FDT_SPECIFIC_CONDUCTANCE, 
               TN = NITROGEN_mg_L, 
               TP = PHOSPHORUS_mg_L, 
+              TDS = TDS_mg_L,
               NH4 = AMMONIA_mg_L, 
               NO3 = NITRATE_mg_L, 
               TKN = NITROGEN_KJELDAHL_TOTAL_00625_mg_L,
@@ -309,7 +310,65 @@ probData <- conventionals2 %>%
                 Ana_Sam_Mrs_Container_Id_Desc, everything()) %>% 
   arrange(Year, StationID, FDT_DATE_TIME)
 
+#clean up workspace
+rm(multistationAnalyteData);rm(multistationFieldData);rm(multiStationGIS_View);rm(multiStationInfo)
+rm(conventionalsList);rm(conventionals);rm(conventionals2)
 ```
+
+
+### Metals CCU
+
+This is a good point to run the Metals CCU analysis before QA and yearly consolidation.
+
+MetalsCCU calculation function from BSA tool. This version is the correct version with Larry's bonus metals commented out.
+
+```{r metalsCCUfunction}
+
+# Metals CCU Calculation, with Larry Bonus metals commented out
+metalsCCUcalc <- function(Hardness,Aluminum,Arsenic,Cadmium,Chromium,Copper,Lead,Nickel,Selenium,Zinc){
+  criteriaHardness <- ifelse(Hardness<25,25,ifelse(Hardness>400,400,Hardness))
+  #AluminumEPAChronic <- Aluminum/150 # Larry Bonus Metal
+  ArsenicChronic <- Arsenic/150
+  #CadmiumChronic <- Cadmium/(exp(0.7852*(log(criteriaHardness))-3.49)) # Larry Bonus Metal
+  ChromiumChronic <- Chromium/((exp(0.819*(log(criteriaHardness))+0.6848))*0.86)
+  CopperChronic <- Copper/((exp(0.8545*(log(criteriaHardness))-1.702))*0.96)
+  LeadChronic <- Lead/((exp(1.273*(log(criteriaHardness))-3.259))*(1.46203-(log(criteriaHardness)*(0.145712))))
+  NickelChronic <- Nickel/((exp(0.846*(log(criteriaHardness))-0.884))*0.997)
+  #SeleniumChronic <- Selenium/5 # Larry Bonus Metal
+  ZincChronic <- Zinc/((exp(0.8473*(log(criteriaHardness))+0.884))*0.986)
+  #return(sum(AluminumEPAChronic,ArsenicChronic,CadmiumChronic,ChromiumChronic,CopperChronic,LeadChronic,
+  #           NickelChronic,SeleniumChronic,ZincChronic))
+  return(sum(ArsenicChronic,ChromiumChronic,CopperChronic,LeadChronic,
+             NickelChronic,ZincChronic))
+}
+
+
+```
+
+Just get necessary data to run function.
+
+```{r metalsCCUcalculation}
+metalsCCUresults <- select(probData,StationID, Year,  FDT_DATE_TIME, Ana_Sam_Mrs_Container_Id_Desc,
+                           HARDNESS, ALUMINUM, ARSENIC, CADMIUM, 
+                           CHROMIUM, COPPER, LEAD, NICKEL, SELENIUM, ZINC)
+
+metalsCCUresults <- metalsCCUresults %>% 
+  rowwise() %>% 
+  mutate( MetalCCU = round(metalsCCUcalc(Hardness = HARDNESS, Aluminum = ALUMINUM, 
+                               Arsenic = ARSENIC,Cadmium = CADMIUM,
+                               Chromium = CHROMIUM,Copper = COPPER, 
+                               Lead = LEAD,Nickel =NICKEL,
+                               Selenium = SELENIUM,Zinc = ZINC), 
+                            digits=4))  %>% 
+  dplyr::select(StationID:Ana_Sam_Mrs_Container_Id_Desc, MetalCCU)
+
+
+probData <- left_join(probData, metalsCCUresults,
+                       by = c("StationID", "Year", "FDT_DATE_TIME", "Ana_Sam_Mrs_Container_Id_Desc"))
+
+``` 
+
+
 
 
 Last, we need to remove extra samples not associated with FP/bio sampling events but not drop too much in case other programs grabbed samples on a different date. This is still best done manually. For 2022IR, Lucy manually screened data for just spring/fall sample information (using excel).
@@ -326,7 +385,7 @@ ecoregion <- pin_get("ejones/WQM-Stations-Spatial", board = "rsconnect") %>%
   dplyr::select(StationID, US_L3CODE, Basin)
 ```
 
-Get all SCI information from pinned data.
+Get all SCI information from pinned data. 
 
 ```{r SCI pins}
 VSCIresults <- pin_get("ejones/VSCIresults", board = "rsconnect")
@@ -372,7 +431,7 @@ rawBio <- pin_get("ejones/benthics", board = "rsconnect") %>%
 ```
 
 
-Get correct SCI information.
+Get correct SCI information. Make sure to grab the VSCI metrics for all stations not run with VSCI and have that ready for final data smashing. We report the VSCI metrics for VCPMI sites for continuity.
 
 ```{r}
 SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! US_L3CODE %in% c(63,65))$BenSampID) %>%
@@ -405,10 +464,18 @@ SCI_filter <- filter(SCI_filter, StationID != "1AXOR000.47") %>%
                 Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
   arrange(Year, StationID, `Collection Date`)
   ) %>% 
-  arrange(Year, StationID, `Collection Date`)
+  dplyr::select(Year, StationID, `Collection Date`, BenSampID, SCI, `SCI Score`) %>% # only actually need these metrics
+  arrange(Year, StationID, `Collection Date`) 
+
+# We report VSCI metrics regardless of SCI used for continuity 
+SCImetrics <- filter(VSCIresults, BenSampID %in% SCI_filter$BenSampID) %>% 
+  dplyr::select(BenSampID:`Fam %MFBI Score`)
+
+SCIfinal <- left_join(SCI_filter, SCImetrics, by = c('BenSampID'))
 
 # clean up workspace
 rm(VSCIresults);rm(VCPMI63results);rm(VCPMI65results); rm(bioData2019);rm(bioData2020); rm(benSamps_Filter_fin)
+rm(SCI_filter)
 ```
 
 
@@ -425,9 +492,9 @@ Next we need to get the total habitat scores for each benthic sample.
 
 ```{r tot hab}
 habSamps <- bind_rows(pin_get('ejones/habSamps', board = 'rsconnect') %>% 
-                        filter(StationID %in% SCI_filter$StationID & year(`Collection Date`) == 2019) ,
+                        filter(StationID %in% x2019Sites & year(`Collection Date`) == 2019) ,
                       pin_get('ejones/habSamps', board = 'rsconnect') %>% 
-                        filter(StationID %in% SCI_filter$StationID & year(`Collection Date`) == 2020)) 
+                        filter(StationID %in% x2020Sites & year(`Collection Date`) == 2020)) 
 # make sure this is close to nrow SCI_filter
 habValues <- pin_get('ejones/habValues', board = 'rsconnect') %>% 
   filter(HabSampID %in% habSamps$HabSampID) %>% 
@@ -435,11 +502,39 @@ habValues <- pin_get('ejones/habValues', board = 'rsconnect') %>%
   summarise(TotHab = sum(HabValue))
 
 totHab <- left_join(habSamps, habValues, by = "HabSampID") %>% 
-  dplyr::select(StationID, `Collection Date`, TotHab)
+  mutate(Year = year(`Collection Date`)) %>% 
+  dplyr::select(StationID, Year, `Collection Date`, TotHab)
+# we will do the join to benthic data and average by year farther down the script
 
 #write.csv(totHab, 'processedData/totHab.csv', row.names = F, na = '')
+
+# clean up workspace
+rm(habSamps); rm(habValues)
 ```
 
+### LRBS data
+
+This analysis is run using C:\HardDriveBackup\R\GitHub\PhysicalHabitat\PHAB2021\Dec2021run.R and the TMDLsummary_2021-12-09.csv was copy/pasted into this project's processed Data directory.
+
+Data is summarized and QAed below.
+
+```{r lrbs qa}
+names(prob2020) # get the variables we need to match
+
+lrbs <- read.csv('processedData/MasterSummary_2021-12-09.csv') %>% #TMDLsummary_2021-12-09.csv') %>% 
+  dplyr::select(StationID, Date, LRBS = LRBS2, Slope, FN_PCT, SA_PCT, SA_FN_PCT, LSUB_DMM, 
+                BL_CB_GR_Embed_PCT = BL_CB_GRmeanEmbed,
+                Embed_PCT = Xembed ) %>% 
+  mutate(Year = year(Date)) %>% 
+  group_by(StationID, Year) %>% 
+  summarise_at(vars(c(LRBS:Embed_PCT)), mean, na.rm = TRUE) 
+
+# see what stations are missing data from this latest two years
+View(left_join(WQM_Stations_Filter, lrbs, by = c('StationID', 'Year')))
+# cool only the expected 2019 sites don't have lrbs
+
+#write.csv(lrbs, 'processedData/FinalLRBS.csv', row.names = F, na = '')
+```
 
 
 ### Geospatial data 
@@ -468,6 +563,28 @@ Once all the necessary stations (wadeable) have QAed watershed information, land
 Lucy cleaned the field/analyte/metals datasets and produced a final version with just the samples closest to the biological samples (if exist) per site. There are still S1/2 in there and all sites need to be averaged to a single row per year. I did this in the prob20192020data_EVJEdits sheet. Where there were R, S1, and S2 samples and missing data from the R line, I used S1 data to fill the missing fields from the same sample date. Where there are only S1 and S2 information, I created a new row and named it R and copied all S1 information for that date/time to be used. These changes are all highlighted in green in the .xlsx sheet.
 
 We still need to average parameters to one result per year for CDF analyses. These steps occur in the next chunk.
+
+
+### EVJ forgot TDS for Lucy's QA, so this is a special step to get TDS data back in before averaging. This will not be necessary in the future because the code is now fixed above to let TDS pass through from conventionals to manual review
+
+```{r TDS smash}
+
+lucy1 <- read_excel('processedData/prob20192020data_LKSEdits.xlsx', sheet = 'prob20192020data_EVJEdits', skip = 1) %>% # skip first row
+  left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , TDS), 
+            by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
+                   "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc")) %>% 
+  
+left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , MetalCCU), 
+            by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
+                   "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc"))
+
+
+#write.csv(lucy1, 'processedData/TDSfix.csv', row.names = F, na = '')
+  rm(lucy1)
+```
+
+EVJ went in to sheet = prob20192020data_EVJEdits and put correct TDS info and cleaned up R/S1 information for that parameter as well. prob20192020data_EVJEdits is good to go for final data consolidation.
+
 
 
 ```{r one row per year}
@@ -503,8 +620,9 @@ lucyHg$MERCURY[lucyHg$MERCURY== 'NaN'] <- NA
 # smash lucyAvg and lucyHg together to a single, clean dataset
 lucyFin <- left_join(lucyAvg, lucyHg, by = c('StationID', 'Year'))
 
+
 # save and manually review one last time
-#write.csv(lucyFin, 'processedData/FinalFieldAnalyteMetals.csv', row.names = F, na= '')'
+#write.csv(lucyFin, 'processedData/FinalFieldAnalyteMetals.csv', row.names = F, na= '')
 # went through and manually checked all blanks, 0's, and random points to make sure data looks good
 
 # clean up workspace
@@ -515,49 +633,48 @@ rm(lucyAvg);rm(lucy);rm(lucyHg); rm(lucyFin)
 
 Now we need to convert the VCPMI scores to VSCI scale for analyses and make one row per bug record where more than one sample were collected per year to ensure data joins cleanly and CDF analysis can run.
 
-```{r bugAvg}
+```{r bugAvg and hab avg}
 source('VCPMItoVSCIconversion.R')
 
 # dataset for eastern bios to review to make sure all VSCI/VCPMI results are used correctly
 #write.csv(filter(SCI_filter, `Collected By` %in% c("BRETT STERN", "MIKEJ SHAVER", "JUSTIND LOYD" )), 'processedData/VSCI_VCPMIreview.csv', row.names = F, na = '')
 
-SCI_filterAdjust <- SCI_filter %>% 
-  filter(SCI != 'VSCI') %>% 
-  mutate(VSCIVCPMI = VCPMItoVSCIconversion(`SCI Score`, probRatio))
-
-bugAvg <- SCI_filter %>% 
+bugAvg <- SCIfinal %>% 
+  full_join(totHab, by = c('StationID', 'Collection Date', 'Year')) %>% 
+  
+  # QA data
+  # dplyr::select(-c(`Family Total Taxa`:`Fam %MFBI Score`)) %>% 
+  # group_by(StationID, `Collection Date`) %>% 
+  # mutate(n = n()) 
+  
+  # special step bc this station had habitat collected on different date than bugs
+  mutate(TotHab = case_when(StationID == '4ALOR005.92' & BenSampID == 'LOR12689R110' ~ 98,
+                            TRUE ~ TotHab)) %>% 
+  filter(!is.na(SCI)) %>% 
+  
   group_by(StationID, Year, SCI) %>% 
-  summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:PctIntol)), mean, na.rm = TRUE) %>% 
+  summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:TotHab)), mean, na.rm = TRUE) %>% 
   mutate(VSCIVCPMI = case_when(SCI == 'VSCI' ~ `SCI Score`,
                                SCI != 'VSCI' ~ VCPMItoVSCIconversion(`SCI Score`, probRatio),
                                TRUE ~ as.numeric(NA))) %>% 
-  mutate(TotTaxa = `Family Total Taxa`,
-         EPTTax = `Family EPT Taxa`,
-         VEphem = `%Ephem`,
-         VPTHydropsychidae = `%PT - Hydropsychidae`,
-         VScrap = case_when(SCI == 'VSCI' ~ `%FamilyScraper`, 
-                                   SCI != 'VSCI' ~ `%Scrap`,
-                                    TRUE ~ as.numeric(NA)),
-         VChiro = case_when(SCI == 'VSCI' ~ `%Chironomidae Score`, 
-                            SCI != 'VSCI' ~ ???????,
-                             TRUE ~ as.numeric(NA)),
-         V2Dom = case_when(SCI == 'VSCI' ~ `Family %2 Dominant`, 
-                            SCI != 'VSCI' ~ ??????,
-                             TRUE ~ as.numeric(NA)),
-         HBI = `Family HBI`,
-         VHapto = ?????????
-         EPTInd = `Family EPT Taxa`)
+  dplyr::select(StationID, Year, TotHab,
+                TotTaxa = `Family Total Taxa`,
+                EPTTax = `Family EPT Taxa`,
+                VEphem = `%Ephem`,
+                VPTHydropsychidae = `%PT - Hydropsychidae`,
+                VScrap = `%FamilyScraper`,
+                VChiro = `%Chironomidae Score`,
+                V2Dom = `Family %2 Dominant`,
+                HBI = `Family HBI`,
+                #VHapto = ????????? # dropped from this report bc could not make joins to old EDAS taxa info easily after EDAS-CEDS data updates
+                EPTInd = `Family EPT Taxa`,
+                VSCIVCPMI)
   
-  
-  
-  dplyr::select(StationID, Year, TotTaxa = `Family Total Taxa`, EPTTax = `Family EPT Taxa`,
-                VEphem = `%Ephem`, VPTHydropsychidae = `%PT - Hydropsychidae`,
-                VScrap = `%FamilyScraper`, VChiro = `%Chironomidae Score`, 
-                V2Dom, HBI = `Family HBI`, VHapto
-                EPTInd
-                VSCIVCPMI
-names(prob2020)
-names(bugAvg)
+
+
+#write.csv(bugAvg, 'processedData/FinalBugHabitatMetrics.csv', row.names = F, na = '')
+# clean up workspace
+rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregion)
 ```
 
 
@@ -570,26 +687,24 @@ names(bugAvg)
 Bring in Field, Analyte, and Metals Data
 
 ```{r field}
-field <- read.csv('processedData/FinalFieldAnalyteMetals.csv')
+field <- read.csv('processedData/FinalFieldAnalyteMetals.csv') %>% 
+  rename('Ortho-P' = 'Ortho.P',
+         'Hg-C' = 'HgCom', 
+         '70331VFine' = 'X70331VFine')
 
 ```
 
-Bring in Bug data
+Bring in Bug and habitat data
 
 ```{r bug}
-
+bugs <- read.csv('processedData/FinalBugHabitatMetrics.csv') 
 ```
 
-Bring in Habitat data
-
-```{r habitat}
-
-```
 
 Bring in LRBS data
 
 ```{r lrbs}
-
+lrbs <- read.csv('processedData/FinalLRBS.csv')
 ```
 
 Bring in landcover data
@@ -602,5 +717,90 @@ Smash data
 
 ```{r data smash}
 
+# we are dropping %haptobenthos metric this cycle so get it out of the dataset we are trying to match
+prob2020fin <- prob2020 %>% 
+  dplyr::select(-VHapto)
+names(prob2020fin) # what to match
+rm(prob2020)
+
+finalSmash <- dplyr::select(WQM_Stations_Filter, DataSource:set) %>% 
+  # add in population information later
+  left_join(field, by = c('StationID', 'Year')) %>% 
+  left_join(lrbs, by = c('StationID', 'Year')) %>% 
+  left_join(bugs, by = c('StationID', 'Year')) %>% 
+  left_join(landcover %>% 
+              mutate(Year = YearSampled),
+            by = c('StationID', 'Year'))
+
+
+names(prob2020fin)[! names(prob2020fin) %in% names(finalSmash)]
+    
+# clean up workspace
+rm(bugs);rm(conn);rm(field);rm(landcover);rm(lrbs);rm(metalsCCUresults);rm(probData)
 ```
 
+
+## Attach final metadata
+
+These are the data windows we are looking at for 2022 IR:
+
+* Full sample window (2001-2020)
+* 2022 IR (2015-2020)
+* 2020 IR (2013-2018)
+* 2018 IR (2011-2016)
+* 2016 IR (2009-2014)
+* 2014 IR (2007-2012)
+* 2012 IR (2005-2010)
+* 2010 IR (2003-2008)
+* 2008 IR (2001-2007)
+* Panels (Phase 1= 2001-2010; Phase 2= 2010-2020) Kept Phase 1 same as 2018IR to balance n samples in window
+* BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020)
+
+
+
+Where possible, get metadata from previous years.
+
+```{r}
+filter(prob2020fin, StationID %in% finalSmash$StationID) %>% 
+  distinct(StationID, .keep_all = T)
+```
+
+Get more info as needed
+
+```{r}
+WQMstations <- pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>% 
+  filter(StationID %in% finalSmash$StationID)
+```
+ 
+ 
+change weight category to order
+
+
+
+
+ 
+ run with VAHUSB??????? james and roanoke are ready
+
+```{r}
+unique(prob2020fin$SubBasin)
+```
+[1] "Basin"              "SubBasin"           "BayShed"            "BayPanel"           "EcoRegion"         
+ [6] "BioRegion"          "Panel"              "BioPanel"           "Order"              "BasinSize"         
+[11] "StreamSizeCat"      "StreamSizeCatPhase" "AREA_SQ_MILES"      "IR2008"             "IR2010"            
+[16] "IR2012"             "IR2014"             "IR2016"             "IR2018"             "IR2020"       
+
+
+
+
+
+
+
+# Design Status update
+
+We also want to add back in the full design status sites for an updated design status dataset.
+
+```{r}
+designStatusNew <- WQM_Stations_Filter <- read_excel('originalData/Wadeable_ProbMon_2019-2020_Final.xlsx', 
+                                                  sheet = 'All20192020StationInfo') %>% 
+  dplyr::select(DataSource:set)
+```
