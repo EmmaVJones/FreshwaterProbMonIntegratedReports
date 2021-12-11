@@ -681,7 +681,7 @@ rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregio
 
 
 
-## Combine data
+# Combine data
 
 
 Bring in Field, Analyte, and Metals Data
@@ -719,7 +719,9 @@ Smash data
 
 # we are dropping %haptobenthos metric this cycle so get it out of the dataset we are trying to match
 prob2020fin <- prob2020 %>% 
-  dplyr::select(-VHapto)
+  dplyr::select(-VHapto) %>% 
+  mutate(IR2022 = 1) %>% 
+  dplyr::select(DataSource:IR2020, IR2022, DO:STXRD )
 names(prob2020fin) # what to match
 rm(prob2020)
 
@@ -736,11 +738,94 @@ finalSmash <- dplyr::select(WQM_Stations_Filter, DataSource:set) %>%
 names(prob2020fin)[! names(prob2020fin) %in% names(finalSmash)]
     
 # clean up workspace
-rm(bugs);rm(conn);rm(field);rm(landcover);rm(lrbs);rm(metalsCCUresults);rm(probData)
+rm(bugs);rm(field);rm(landcover);rm(lrbs);rm(metalsCCUresults);rm(probData)
+```
+```{r}
+names(prob2020fin)[! names(prob2020fin) %in% names(finalSmash)]
+
+finalSmash1 <- finalSmash
 ```
 
 
 ## Attach final metadata
+
+
+First, where possible, get metadata from previous years.
+
+```{r grab previous metdata}
+# get what you can from previous metadat
+previousInfo <- filter(prob2020fin, StationID %in% finalSmash$StationID) %>% 
+  distinct(StationID, .keep_all = T)
+previousInfoMetadata <-  filter(prob2020fin, StationID %in% previousInfo$StationID) %>%  
+                                  dplyr::select(StationID, Basin, SubBasin, BayShed, EcoRegion, 
+                                                BioRegion, Order, BasinSize, StreamSizeCat) %>% 
+                                  distinct(StationID, .keep_all = T)
+```
+
+Use pinned data to get other basic metadata.
+
+```{r new sites}
+finalSmashMetadata <- filter(finalSmash, ! StationID %in% previousInfoMetadata$StationID) %>% 
+  left_join(pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>%
+              filter(StationID %in% finalSmash$StationID) %>% 
+              dplyr::select(StationID, Basin, US_L3NAME, Basin_Code), 
+            by = 'StationID') %>% 
+  mutate(Basin = case_when(Basin %in% c("James River Basin" ) ~ "James",
+                           Basin %in% c("Roanoke River Basin" ) ~ "Roanoke",
+                           Basin %in% c( "New River Basin"  ) ~ "New",
+                           Basin %in% c( "Potomac River Basin" , "Shenandoah River Basin") ~ "Potomac-Shenandoah",
+                           Basin %in% c("Tennessee and Big Sandy River Basin" ) ~  "Tennessee",
+                           Basin %in% c("Rappahannock River Basin", "York River Basin" ) ~ "Rappahannock-York",
+                           Basin %in% c(  "Chowan and Dismal Swamp River Basin"  ) ~   "Chowan" ,
+                           TRUE ~ as.character(NA)),
+         EcoRegion = case_when(US_L3NAME %in% c("Ridge and Valley" ) ~ "Central Appalachian Ridges and Valleys",
+                               US_L3NAME %in% c("Blue Ridge" ) ~ "Blue Ridge Mountains",
+                               TRUE ~ as.character(US_L3NAME)),
+         SubBasin =  case_when(Basin_Code %in% c("James-Lower", "James-Middle", "James-Upper","Appomattox"  ) ~ "James",   
+                               Basin_Code %in% c("Roanoke", "Yadkin") ~ "Roanoke",
+                               Basin_Code %in% c( "New"  ) ~ "New",
+                               Basin_Code %in% c(  "Potomac-Lower") ~  "Potomac" ,
+                               Basin_Code%in% c("Potomac-Shenandoah") ~  "Shenandoah",
+                               Basin_Code %in% c("Rappahannock") ~ "Rappahannock",
+                               Basin_Code%in% c("York"  ) ~  "York" ,
+                               Basin_Code %in% c("Chowan-Dismal" ) ~ "Chowan",
+                               Basin_Code %in% c("Tennessee-Holston" ) ~  "Holston",
+                               Basin_Code  %in% c( "Tennessee-Clinch"  ) ~   "Clinch-Powell" ,
+                               Basin_Code  %in% c( "Tennessee-Big Sandy") ~  "Big Sandy",
+                               # hardly ever used "Cheasapeake Bay"
+                               TRUE ~ as.character(NA)),
+         BayShed = case_when(Basin %in% c("James River Basin","Potomac River Basin" , "Shenandoah River Basin",
+                                          "Rappahannock River Basin", "York River Basin") ~ "Bay",
+                             TRUE ~ as.character("NonBay")),
+         BioRegion = case_when(EcoRegion %in% c("Middle Atlantic Coastal Plain", "Southeastern Plains") ~ "Coast",
+                               EcoRegion %in% c("Piedmont", "Northern Piedmont") ~ "Piedmont",
+                               TRUE ~ as.character('Mountain')),
+         StationID_Trend = StationID,
+         Order = weightcategory,
+         AREA_SQ_MILES = totalArea_sqMile,
+         BasinSize = case_when(AREA_SQ_MILES < 1 ~ 1,
+                               between(AREA_SQ_MILES, 1, 9.99999999) ~ 2, #between is >= and <= 
+                               between(AREA_SQ_MILES, 10, 49.9999999) ~ 3, #between is >= and <= 
+                               AREA_SQ_MILES >= 50 ~ 4,
+                               TRUE ~ as.numeric(NA)),
+         StreamSizeCat = case_when(BasinSize %in% c(1,2) ~ 'Small',
+                                   BasinSize == 3 ~ "Medium",
+                                   BasinSize == 4 ~ "Large",
+                                   TRUE ~ as.character(NA))) %>% 
+  dplyr::select(DataSource:set, Basin, SubBasin, BayShed, EcoRegion, BioRegion, Order, BasinSize,
+                StreamSizeCat,AREA_SQ_MILES, DO:STXRD) %>% 
+  bind_rows(
+     filter(finalSmash, StationID %in% previousInfoMetadata$StationID) %>% 
+       left_join(previousInfoMetadata, by = 'StationID') %>% 
+       mutate(AREA_SQ_MILES = totalArea_sqMile) %>% 
+       dplyr::select(DataSource:set, Basin, SubBasin, BayShed, EcoRegion, BioRegion, Order, BasinSize,
+                     StreamSizeCat, AREA_SQ_MILES, DO:STXRD)
+     )
+
+
+names(prob2020fin)[! names(prob2020fin) %in% names(finalSmashMetadata)]
+
+```
 
 These are the data windows we are looking at for 2022 IR:
 
@@ -753,17 +838,38 @@ These are the data windows we are looking at for 2022 IR:
 * 2012 IR (2005-2010)
 * 2010 IR (2003-2008)
 * 2008 IR (2001-2007)
-* Panels (Phase 1= 2001-2010; Phase 2= 2010-2020) Kept Phase 1 same as 2018IR to balance n samples in window
+* Panels (Phase 1= 2001-2009; Phase 2= 2010-2020) Kept Phase 1 same as 2018IR to balance n samples in window
 * BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020)
 
 
-
-Where possible, get metadata from previous years.
-
-```{r}
-filter(prob2020fin, StationID %in% finalSmash$StationID) %>% 
-  distinct(StationID, .keep_all = T)
+```{r temporal metadata}
+finalSmashMetadata <- mutate(finalSmashMetadata,
+                            IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(1)),
+                            IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(1)),
+                            IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(1)),
+                            IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(1)),
+                            IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(1)),
+                            IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(1)),
+                            IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(1)),
+                            IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(1)),
+                            Panel = case_when(between(Year, 2001, 2009)~ 'Phase1',
+                                              between(Year, 2010, 2020)~ 'Phase2',
+                                              TRUE ~ as.character(NA)),
+                            BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
+                                              between(Year, 2006, 2010)~ 'Phase2',
+                                              between(Year, 2011, 2015)~ 'Phase3',
+                                              between(Year, 2016, 2020)~ 'Phase4',
+                                              TRUE ~ as.character(NA)),
+                            BayPanel = paste0(BayShed, Panel),
+                            StreamSizeCatPhase = paste0(StreamSizeCat, Panel),
+                            DataSource = "State ProbMon") %>% # change region info to State ProbMon 
+  dplyr::select(names(prob2020fin))
 ```
+
+
+
+# add VAHUSB
+
 
 Get more info as needed
 
