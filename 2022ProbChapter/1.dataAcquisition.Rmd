@@ -740,10 +740,13 @@ names(prob2020fin)[! names(prob2020fin) %in% names(finalSmash)]
 # clean up workspace
 rm(bugs);rm(field);rm(landcover);rm(lrbs);rm(metalsCCUresults);rm(probData)
 ```
+
+
+
+
 ```{r}
 names(prob2020fin)[! names(prob2020fin) %in% names(finalSmash)]
 
-finalSmash1 <- finalSmash
 ```
 
 
@@ -864,37 +867,74 @@ finalSmashMetadata <- mutate(finalSmashMetadata,
                             StreamSizeCatPhase = paste0(StreamSizeCat, Panel),
                             DataSource = "State ProbMon") %>% # change region info to State ProbMon 
   dplyr::select(names(prob2020fin))
+
+
+names(prob2020fin)[! names(prob2020fin) %in% names(finalSmashMetadata)]
+
+
+```
+## Smash old and new data
+
+```{r old and new}
+prob2022 <- bind_rows(prob2020fin, finalSmashMetadata) %>% 
+  arrange(Year, StationID)
 ```
 
 
+## New for 2022, add VAHUSB
 
-# add VAHUSB
+Some of our larger basins (looking at you James and Roanoke) are ready for refinement.
 
-
-Get more info as needed
-
-```{r}
+```{r VAHUSB}
 WQMstations <- pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>% 
-  filter(StationID %in% finalSmash$StationID)
+  filter(StationID %in% prob2022$StationID) %>% 
+  dplyr::select(StationID, VAHUSB)
+
+prob2022 <- left_join(prob2022, WQMstations, by = "StationID") %>% 
+  dplyr::select(DataSource:SubBasin, VAHUSB, BayShed:STXRD)
 ```
  
- 
-change weight category to order
 
+What's the breakdown of this new category?
 
-
-
- 
- run with VAHUSB??????? james and roanoke are ready
-
-```{r}
-unique(prob2020fin$SubBasin)
+```{r VAHUSB summary}
+prob2022 %>% 
+  group_by( VAHUSB) %>% 
+  count()
 ```
-[1] "Basin"              "SubBasin"           "BayShed"            "BayPanel"           "EcoRegion"         
- [6] "BioRegion"          "Panel"              "BioPanel"           "Order"              "BasinSize"         
-[11] "StreamSizeCat"      "StreamSizeCatPhase" "AREA_SQ_MILES"      "IR2008"             "IR2010"            
-[16] "IR2012"             "IR2014"             "IR2016"             "IR2018"             "IR2020"       
+```{r try with 4th order}
+library(sf)
 
+wshd4Order <- st_read("C:/HardDriveBackup/GIS/GIS_BaseLayer_Datasets.gdb",'VA_SUBBASINS_4TH_ORDER_STG')
+
+prob2022sf <- prob2022 %>% 
+    st_as_sf(coords = c("LongitudeDD", "LatitudeDD"), 
+               remove = F, # don't remove these lat/lon cols from df
+               crs = 4326) %>% # add projection, needs to be geographic for now bc entering lat/lng
+  st_intersection(dplyr::select(wshd4Order, Basin4thOrder = NAME)) %>% 
+  dplyr::select(DataSource:VAHUSB, Basin4thOrder, BayShed:STXRD) %>% 
+  arrange(Year, StationID) %>% 
+  st_drop_geometry()
+
+write.csv(prob2022sf, 'processedData/prob2022sf.csv', row.names = F, na  ='')
+
+write.csv(prob2022sf %>% 
+  group_by(Basin) %>% 
+  count(), 'processedData/BasinSummary.csv', row.names = F, na  ='')
+
+
+write.csv(prob2022sf %>% 
+  group_by(SubBasin) %>% 
+  count, 'processedData/SubBasinSummary.csv', row.names = F, na  ='')
+
+write.csv(prob2022sf %>% 
+  group_by(VAHUSB) %>% 
+  count(), 'processedData/VAHUSBSummary.csv', row.names = F, na  ='')
+
+write.csv(prob2022sf %>% 
+  group_by(Basin4thOrder) %>% 
+  count(), 'processedData/Basin4OrderSummary.csv', row.names = F, na  ='')
+```
 
 
 
@@ -906,7 +946,22 @@ unique(prob2020fin$SubBasin)
 We also want to add back in the full design status sites for an updated design status dataset.
 
 ```{r}
-designStatusNew <- WQM_Stations_Filter <- read_excel('originalData/Wadeable_ProbMon_2019-2020_Final.xlsx', 
-                                                  sheet = 'All20192020StationInfo') %>% 
-  dplyr::select(DataSource:set)
+designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/biology20012018final.xlsx', sheet = 'biology2020') %>% 
+  rename(StationID = sampleID) %>% 
+  mutate(IR2022 = NA)
+
+
+designStatusNew <- read_excel('originalData/Wadeable_ProbMon_2019-2020_Final.xlsx', 
+                              sheet = 'All20192020StationInfo') %>% 
+  dplyr::select(StationID:set) %>% 
+  left_join(dplyr::select(finalSmashMetadata, StationID, `strahler order` = Order, 
+                          `Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD, 
+                          stratum, designweight, `weight category` = weightcategory,
+                          station"            "state"
+                          
+                          Year, IR2008:IR2022)
+
+
 ```
+
+
