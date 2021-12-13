@@ -26,8 +26,10 @@ Though R 4.1.1 is the latest supported version of R on CRAN, this report is prod
 
 New for 2022, the 1.dataAcquisition.Rmd script walks users through the necessary steps to query data from the ODS environment, clean it, summarize it, and manipulate it into a format used by later reporting modules. 
 
-The major outputs from this script is the designStatusIR2022.csv and probIR2022final.csv in the /processedData/ directory.
+The major outputs from this script is the designStatusIR2022.csv and Wadeable_ProbMon_2001-2020.csv in the /processedData/ directory.
 
 ### Data Analysis
 
 The 2.dataAnalysis.Rmd script walks users through the necessary steps to analyze the above data to generate CDF and relative risk estimates.
+
+This analysis is run in R 3.6.1 to ensure consistency with last cycle's spsurvey version.

@@ -717,12 +717,24 @@ prob2020Po <- filter(prob2020, StationID == '8-POR015.70') %>%
 prob2020 <- bind_rows(prob2020new, prob2020Po) %>% 
   arrange(Year, StationID)
 
+#write.csv(prob2020, 'prob2020PoFix.csv', row.names = F, na = '')
+
 rm(prob2020new); rm(prob2020Po); rm(poFix)
 ```
 
 
 
 # Combine data
+
+
+Bring in corrected prob2020 with Po river fix.
+
+```{r prob2020}
+prob2020 <- read.csv('prob2020PoFix.csv') %>% 
+   rename('Ortho-P' = 'Ortho.P',
+         'Hg-C' = 'Hg.C', 
+         '70331VFine' = 'X70331VFine')
+```
 
 
 Bring in Field, Analyte, and Metals Data
@@ -888,14 +900,14 @@ These are the data windows we are looking at for 2022 IR:
 
 ```{r temporal metadata}
 finalSmashMetadata <- mutate(finalSmashMetadata,
-                            IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(1)),
-                            IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(1)),
-                            IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(1)),
-                            IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(1)),
-                            IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(1)),
-                            IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(1)),
-                            IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(1)),
-                            IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(1)),
+                            IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(NA)),
+                            IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(NA)),
+                            IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(NA)),
+                            IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(NA)),
+                            IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(NA)),
+                            IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
+                            IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
+                            IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)),
                             Panel = case_when(between(Year, 2001, 2009)~ 'Phase1',
                                               between(Year, 2010, 2020)~ 'Phase2',
                                               TRUE ~ as.character(NA)),
@@ -1031,7 +1043,7 @@ prob2022fin %>%
 
 ```{r save data for review}
 
-write.csv(prob2022fin, 'processedData/probIR2022final.csv', row.names = F, na  ='')
+write.csv(prob2022fin, 'processedData/Wadeable_ProbMon_2001-2020.csv', row.names = F, na  ='')
 
 write.csv(prob2022fin %>% 
   group_by(Basin) %>% 
@@ -1060,33 +1072,56 @@ write.csv(prob2022fin %>%
 
 We also want to add back in the full design status sites for an updated design status dataset.
 
+Note the sampleID field uses the StationID_Trend information to ensure each station has a unique name for CDF analysis purposes.
+
 ```{r}
 designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/biology20012018final.xlsx', sheet = 'biology2020') %>% 
-  rename(StationID = sampleID) %>% 
-  mutate(IR2022 = NA, VAHUSB = NA, VAHUSB_NAME = NA)
+  mutate(IR2022 = NA, VAHUSB = NA, VAHUSB_NAME = NA,
+         IR2008 = case_when(IR2008 == 2008 ~ 2008, TRUE ~ as.numeric(NA)),
+         IR2010 = case_when(IR2010 == 2010 ~ 2010, TRUE ~ as.numeric(NA)),
+         IR2012 = case_when(IR2012 == 2012 ~ 2012, TRUE ~ as.numeric(NA)),
+         IR2014 = case_when(IR2014 == 2014 ~ 2014, TRUE ~ as.numeric(NA)),
+         IR2016 = case_when(IR2016== 2016 ~ 2016, TRUE ~ as.numeric(NA)),
+         IR2018 = case_when(IR2018 == 2018 ~ 2018, TRUE ~ as.numeric(NA)),
+         IR2020 = case_when(IR2020 == 2020 ~ 2020, TRUE ~ as.numeric(NA)))
+
 
 
 designStatusNew <- read_excel('originalData/Wadeable_ProbMon_2019-2020_Final.xlsx', 
                               sheet = 'All20192020StationInfo') %>% 
   dplyr::select(StationID:set) %>% 
   left_join(dplyr::select(prob2022fin, StationID, Year, #`strahler order` = Order, 
-                          `Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD, 
+                          #`Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD, 
                           Basin:IR2022, Order, `weight category` = weightcategory) %>% 
               mutate(`strahler order` = Order),
                           # stratum, designweight, `weight category` = weightcategory,
                           # station, # will overwrite later,
                           # state:set), 
-            by = c('StationID', 'Year')) %>% 
+            by = c('StationID', 'Year')) %>%
+  mutate(sampleID = coalesce(StationID_Trend, StationID)) %>% # use StationID_Trend where available
+  rename(`Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD) %>% 
   dplyr::select(names(designStatusOld))
 
-designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS'),
+# add subbasin info
+designStatusOldSampled <- filter(designStatusOld, status == 'TS') %>% 
+  dplyr::select(-c(VAHUSB, VAHUSB_NAME)) %>% 
+    st_as_sf(coords = c("Longitude-DD", "Latitude-DD"), 
+               remove = F, # don't remove these lat/lon cols from df
+               crs = 4326) %>% # add projection, needs to be geographic for now bc entering lat/lng
+  st_intersection(vahusb) %>% 
+  rename(`strahler order` =strahler.order,
+         `Longitude-DD` = Longitude.DD, `Latitude-DD` = Latitude.DD,
+         `weight category` = weight.category) %>% 
+  arrange(Year, sampleID) %>% 
+  st_drop_geometry()
+
+designStatusFin <- bind_rows(designStatusOldSampled,
                              filter(designStatusNew, status == 'TS'),
                              filter(designStatusOld, status != 'TS'),
                              filter(designStatusNew, status != 'TS')) %>% 
-  mutate(station = 1:n())
+  mutate(station = 1:n()) %>% 
+  dplyr::select(sampleID:SubBasin, VAHUSB, VAHUSB_NAME,BayShed:IR2022)
 
-write.csv(designStatusFin, 'processedData/designStatusIR2022.csv', row.names = F, na = '')
+#write.csv(designStatusFin, 'processedData/designStatusIR2022.csv', row.names = F, na = '')
 
 ```
-
-
