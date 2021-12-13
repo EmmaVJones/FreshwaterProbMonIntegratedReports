@@ -414,23 +414,6 @@ benSamps_Filter_fin <- bind_rows(bioData2019, bioData2020) %>%
   left_join(ecoregion, by = 'StationID')
 ```
 
-Grab raw benthic data so we can add in the % haptobenthos metric that isn't in basic SCI data.
-
-```{r raw benthic}
-rawBio <- pin_get("ejones/benthics", board = "rsconnect") %>% 
-  #filter(BenSampID %in% benSamps_Filter_fin$BenSampID) %>% 
-  filter(BenSampID %in% c('FAMACO4564')) %>% #'ABR3814', 'ABR3814R110')) %>% 
-  
-  # join in master taxa list to get habit info
-  left_join(pin_get('ejones/masterTaxaGenus', board = 'rsconnect') %>% 
-              dplyr::select(FinalID, FamHabit),
-            by = 'FinalID') %>% 
-  filter(FamHabit %in% c('Climber', 'Clinger')) %>% 
-  group_by(StationID, BenSampID) %>% 
-  summarise(`%Hapto` = sum(Individuals))
-```
-
-
 Get correct SCI information. Make sure to grab the VSCI metrics for all stations not run with VSCI and have that ready for final data smashing. We report the VSCI metrics for VCPMI sites for continuity.
 
 ```{r}
@@ -472,6 +455,19 @@ SCImetrics <- filter(VSCIresults, BenSampID %in% SCI_filter$BenSampID) %>%
   dplyr::select(BenSampID:`Fam %MFBI Score`)
 
 SCIfinal <- left_join(SCI_filter, SCImetrics, by = c('BenSampID'))
+```
+
+
+While we are pulling data, NRO has requested we ensure the Po River trend site is only using VCPMI65. We will repull all the data for this site, average it, and smash it in to the final dataset later, overwriting previous benthic information.
+
+```{r po river fix}
+
+po <- filter(VCPMI65results, StationID == '8-POR015.70'& `Target Count` == 110) %>% 
+  mutate(Year = year(`Collection Date`)) %>% 
+  filter(Year %in% c(2004,2011,2013,2015,2017))#,2019))# just the samples associated with prob
+# but we only report the VSCI metrics so grab those for these bensamps
+poMetrics <- filter(VSCIresults, BenSampID %in% po$BenSampID)
+
 
 # clean up workspace
 rm(VSCIresults);rm(VCPMI63results);rm(VCPMI65results); rm(bioData2019);rm(bioData2020); rm(benSamps_Filter_fin)
@@ -673,11 +669,56 @@ bugAvg <- SCIfinal %>%
 
 
 #write.csv(bugAvg, 'processedData/FinalBugHabitatMetrics.csv', row.names = F, na = '')
-# clean up workspace
-rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregion)
 ```
 
+And back to the Po fix, run the VCMPI conversion on those samples and combine the benthic metrics by year.
 
+```{r po fix2}
+# first get VSCI metrics associated with site and VCPMI65 score
+poFix <- left_join(dplyr::select(poMetrics, BenSampID: `Fam %MFBI Score`, StationID),
+                   dplyr::select(po, BenSampID, SCI, `SCI Score`, Year, StationID),
+                   by = c('BenSampID',  'StationID')) %>% 
+# then average everything by year
+group_by(StationID, Year, SCI) %>% 
+summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:`Fam %MFBI Score`)), mean, na.rm = TRUE) %>% 
+# then covert average VCPMI65 to VSCIVCPMI scale
+  mutate( VSCIVCPMI = case_when(SCI == 'VSCI' ~ `SCI Score`,
+                               SCI != 'VSCI' ~ VCPMItoVSCIconversion(`SCI Score`, probRatio),
+                               TRUE ~ as.numeric(NA))) %>% 
+  dplyr::select(StationID, Year,# TotHab,
+                TotTaxa = `Family Total Taxa`,
+                EPTTax = `Family EPT Taxa`,
+                VEphem = `%Ephem`,
+                VPTHydropsychidae = `%PT - Hydropsychidae`,
+                VScrap = `%FamilyScraper`,
+                VChiro = `%Chironomidae Score`,
+                V2Dom = `Family %2 Dominant`,
+                HBI = `Family HBI`,
+                #VHapto = ????????? # dropped from this report bc could not make joins to old EDAS taxa info easily after EDAS-CEDS data updates
+                EPTInd = `Family EPT Taxa`,
+                VSCIVCPMI) 
+
+rm(po); rm(poMetrics)
+# clean up workspace
+rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregion)
+
+```
+
+Now overwrite these results for all previous Po results.
+
+```{r Po Overwrite}
+prob2020new <- filter(prob2020, StationID != '8-POR015.70')
+prob2020Po <- filter(prob2020, StationID == '8-POR015.70') %>% 
+  dplyr::select(-c(TotTaxa:VSCIVCPMI)) %>% 
+  mutate(VHapto = NA) %>% # placeholder
+  left_join(poFix, by = c('StationID', 'Year')) %>% 
+  dplyr::select(names(prob2020new))
+
+prob2020 <- bind_rows(prob2020new, prob2020Po) %>% 
+  arrange(Year, StationID)
+
+rm(prob2020new); rm(prob2020Po); rm(poFix)
+```
 
 
 
@@ -886,54 +927,128 @@ prob2022 <- bind_rows(prob2020fin, finalSmashMetadata) %>%
 Some of our larger basins (looking at you James and Roanoke) are ready for refinement.
 
 ```{r VAHUSB}
-WQMstations <- pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>% 
-  filter(StationID %in% prob2022$StationID) %>% 
-  dplyr::select(StationID, VAHUSB)
+# not all stations have VAHUSB info in this table??
+# WQMstations <- pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>% 
+#   filter(StationID %in% prob2022$StationID) %>% 
+#   dplyr::select(StationID, VAHUSB)
 
-prob2022 <- left_join(prob2022, WQMstations, by = "StationID") %>% 
-  dplyr::select(DataSource:SubBasin, VAHUSB, BayShed:STXRD)
+
+# prob2022 <- left_join(prob2022, WQMstations, by = "StationID") %>% 
+#   dplyr::select(DataSource:SubBasin, VAHUSB, BayShed:STXRD)
 ```
  
 
-What's the breakdown of this new category?
+Make the vahusb dataset
 
-```{r VAHUSB summary}
-prob2022 %>% 
-  group_by( VAHUSB) %>% 
-  count()
-```
-```{r try with 4th order}
+```{r}
+# vahusb <- st_read('C:/HardDriveBackup/GIS/Assessment/AssessmentRegions_VA84_basins.shp') %>% 
+#   group_by(VAHUSB) %>% 
+#   summarise() %>% 
+#   mutate(VAHUSB_NAME = case_when(VAHUSB == 'AO' ~ 'Atlantic Ocean Coastal',
+#                                  VAHUSB == 'AS' ~ 'Albemarle Sound',
+#                                  VAHUSB == 'BS' ~ 'Big Sandy River',
+#                                  VAHUSB == 'CB' ~ 'Chesapeake Bay/Chesapeake Bay Coastal',
+#                                  VAHUSB == 'CL' ~ 'Chowan River, Lower',
+#                                  VAHUSB == 'CM' ~ 'Chowan River-Meherrin River',
+#                                  VAHUSB == 'CU' ~ 'Chowan River, Upper',
+#                                  VAHUSB == 'JA' ~ 'James River- Appomattox River',
+#                                  VAHUSB == 'JL' ~ 'James River, Lower (Tidal)',
+#                                  VAHUSB == 'JM' ~ 'James River, Middle (Piedmont)',
+#                                  VAHUSB == 'JR' ~ 'James River- Rivanna River',
+#                                  VAHUSB == 'JU' ~ 'James River, Upper (Mountain)',
+#                                  VAHUSB == 'NE' ~ 'New River',
+#                                  VAHUSB == 'PL' ~ 'Potomac River, Lower',
+#                                  VAHUSB == 'PS' ~ 'Potomac River-Shenandoah River',
+#                                  VAHUSB == 'PU' ~ 'Potomac River, Upper',
+#                                  VAHUSB == 'RA' ~ 'Rappahannock River',
+#                                  VAHUSB == 'RD' ~ 'Roanoke River- Dan River',
+#                                  VAHUSB == 'RL' ~ 'Roanoke River, Lower',
+#                                  VAHUSB == 'RU' ~ 'Roanoke River, Upper',
+#                                  VAHUSB == 'TC' ~ 'Tennessee-Clinch River',
+#                                  VAHUSB == 'TH' ~ 'Tennessee-Holston River',
+#                                  VAHUSB == 'TP' ~ 'Tennessee-Powell River',
+#                                  VAHUSB == 'YA' ~ 'Yadkin River-Ararat River',
+#                                  VAHUSB == 'YO' ~ 'York River',
+#                                  TRUE ~ as.character(NA)))
+# 
+# View(vahusb %>% st_drop_geometry())
+# 
+# #st_write(vahusb, 'C:/HardDriveBackup/GIS/Assessment/VAHUSB.shp')
+``` 
+Spatially join prob2022 to this VAHUSB dataset and 4th order watershed as well
+
+```{r new basin analyses}
 library(sf)
 
+
+vahusb <- st_read('C:/HardDriveBackup/GIS/Assessment/VAHUSB.shp') %>% 
+  rename(VAHUSB_NAME = VAHUSB_)
 wshd4Order <- st_read("C:/HardDriveBackup/GIS/GIS_BaseLayer_Datasets.gdb",'VA_SUBBASINS_4TH_ORDER_STG')
 
 prob2022sf <- prob2022 %>% 
     st_as_sf(coords = c("LongitudeDD", "LatitudeDD"), 
                remove = F, # don't remove these lat/lon cols from df
                crs = 4326) %>% # add projection, needs to be geographic for now bc entering lat/lng
-  st_intersection(dplyr::select(wshd4Order, Basin4thOrder = NAME)) %>% 
-  dplyr::select(DataSource:VAHUSB, Basin4thOrder, BayShed:STXRD) %>% 
+  st_intersection(vahusb) 
+
+# after careful review, this step was dropped because a station was lost in this intersection and the n in each category didn't prove useful for further analysis
+#%>% 
+  #st_intersection(dplyr::select(wshd4Order, Basin4thOrder = NAME)) 
+
+prob2022sf$StationID[!prob2022sf$StationID %in% prob2022$StationID]
+
+prob2022fin <- prob2022sf %>% 
+  dplyr::select(DataSource:SubBasin, VAHUSB, VAHUSB_NAME,# Basin4thOrder, 
+                BayShed:STXRD) %>% 
   arrange(Year, StationID) %>% 
   st_drop_geometry()
+```
 
-write.csv(prob2022sf, 'processedData/prob2022sf.csv', row.names = F, na  ='')
+ 
 
-write.csv(prob2022sf %>% 
+What's the breakdown of these new categories?
+
+```{r VAHUSB summary}
+prob2022fin %>% 
+  group_by( VAHUSB, VAHUSB_NAME) %>% 
+  count()%>% 
+  arrange(desc(n))
+
+# prob2022fin %>% 
+#   group_by( Basin4thOrder) %>% 
+#   count() %>% 
+#   arrange(desc(n))
+# # too many levels, looking for at least 25-30 sites to run cdf analyses
+
+
+#prob2022fin <- dplyr::select(prob2022fin, -Basin4thOrder)
+```
+
+
+
+
+
+
+```{r save data for review}
+
+write.csv(prob2022fin, 'processedData/prob2022fin.csv', row.names = F, na  ='')
+
+write.csv(prob2022fin %>% 
   group_by(Basin) %>% 
-  count(), 'processedData/BasinSummary.csv', row.names = F, na  ='')
+  count(), 'processedData/summaries/BasinSummary.csv', row.names = F, na  ='')
 
 
-write.csv(prob2022sf %>% 
+write.csv(prob2022fin %>% 
   group_by(SubBasin) %>% 
-  count, 'processedData/SubBasinSummary.csv', row.names = F, na  ='')
+  count, 'processedData/summaries/SubBasinSummary.csv', row.names = F, na  ='')
 
-write.csv(prob2022sf %>% 
+write.csv(prob2022fin %>% 
   group_by(VAHUSB) %>% 
-  count(), 'processedData/VAHUSBSummary.csv', row.names = F, na  ='')
+  count(), 'processedData/summaries/VAHUSBSummary.csv', row.names = F, na  ='')
 
-write.csv(prob2022sf %>% 
-  group_by(Basin4thOrder) %>% 
-  count(), 'processedData/Basin4OrderSummary.csv', row.names = F, na  ='')
+# write.csv(prob2022fin %>% 
+#   group_by(Basin4thOrder) %>% 
+#   count(), 'processedData/summaries/Basin4OrderSummary.csv', row.names = F, na  ='')
 ```
 
 
@@ -948,19 +1063,29 @@ We also want to add back in the full design status sites for an updated design s
 ```{r}
 designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/biology20012018final.xlsx', sheet = 'biology2020') %>% 
   rename(StationID = sampleID) %>% 
-  mutate(IR2022 = NA)
+  mutate(IR2022 = NA, VAHUSB = NA, VAHUSB_NAME = NA)
 
 
 designStatusNew <- read_excel('originalData/Wadeable_ProbMon_2019-2020_Final.xlsx', 
                               sheet = 'All20192020StationInfo') %>% 
   dplyr::select(StationID:set) %>% 
-  left_join(dplyr::select(finalSmashMetadata, StationID, `strahler order` = Order, 
+  left_join(dplyr::select(prob2022fin, StationID, Year, #`strahler order` = Order, 
                           `Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD, 
-                          stratum, designweight, `weight category` = weightcategory,
-                          station"            "state"
-                          
-                          Year, IR2008:IR2022)
+                          Basin:IR2022, Order, `weight category` = weightcategory) %>% 
+              mutate(`strahler order` = Order),
+                          # stratum, designweight, `weight category` = weightcategory,
+                          # station, # will overwrite later,
+                          # state:set), 
+            by = c('StationID', 'Year')) %>% 
+  dplyr::select(names(designStatusOld))
 
+designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS'),
+                             filter(designStatusNew, status == 'TS'),
+                             filter(designStatusOld, status != 'TS'),
+                             filter(designStatusNew, status != 'TS')) %>% 
+  mutate(station = 1:n())
+
+write.csv(designStatusFin, 'processedData/designStatusIR2022.csv', row.names = F, na = '')
 
 ```
 
