@@ -894,7 +894,7 @@ These are the data windows we are looking at for 2022 IR:
 * 2012 IR (2005-2010)
 * 2010 IR (2003-2008)
 * 2008 IR (2001-2007)
-* Panels (Phase 1= 2001-2009; Phase 2= 2010-2020) Kept Phase 1 same as 2018IR to balance n samples in window
+* Panels (Phase 1= 2001-2010; Phase 2= 2011-2020) Kept Phase 1 same as 2018IR to balance n samples in window
 * BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020)
 
 
@@ -908,8 +908,8 @@ finalSmashMetadata <- mutate(finalSmashMetadata,
                             IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
                             IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
                             IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)),
-                            Panel = case_when(between(Year, 2001, 2009)~ 'Phase1',
-                                              between(Year, 2010, 2020)~ 'Phase2',
+                            Panel = case_when(between(Year, 2001, 2010)~ 'Phase1',
+                                              between(Year, 2011, 2020)~ 'Phase2',
                                               TRUE ~ as.character(NA)),
                             BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
                                               between(Year, 2006, 2010)~ 'Phase2',
@@ -1072,7 +1072,9 @@ write.csv(prob2022fin %>%
 
 We also want to add back in the full design status sites for an updated design status dataset.
 
-Note the sampleID field uses the StationID_Trend information to ensure each station has a unique name for CDF analysis purposes.
+Note the sampleID field uses the StationID_Trend information to ensure each station has a unique name for CDF analysis purposes. 
+
+We also need to update the design status window information to match the new window breakdowns.
 
 ```{r}
 designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/biology20012018final.xlsx', sheet = 'biology2020') %>% 
@@ -1083,7 +1085,17 @@ designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonInte
          IR2014 = case_when(IR2014 == 2014 ~ 2014, TRUE ~ as.numeric(NA)),
          IR2016 = case_when(IR2016== 2016 ~ 2016, TRUE ~ as.numeric(NA)),
          IR2018 = case_when(IR2018 == 2018 ~ 2018, TRUE ~ as.numeric(NA)),
-         IR2020 = case_when(IR2020 == 2020 ~ 2020, TRUE ~ as.numeric(NA)))
+         IR2020 = case_when(IR2020 == 2020 ~ 2020, TRUE ~ as.numeric(NA)),
+         Panel = case_when(between(Year, 2001, 2010)~ 'Phase1',
+                           between(Year, 2011, 2020)~ 'Phase2',
+                           TRUE ~ as.character(NA)),
+         BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
+                              between(Year, 2006, 2010)~ 'Phase2',
+                              between(Year, 2011, 2015)~ 'Phase3',
+                              between(Year, 2016, 2020)~ 'Phase4',
+                              TRUE ~ as.character(NA)),
+         BayPanel = paste0(BayShed, Panel),
+         StreamSizeCatPhase = paste0(StreamSizeCat, Panel))
 
 
 

@@ -117,16 +117,21 @@ listOfResults <- function(popstatus.est, finalData, parameterName){
     estimate2019 = subpopEstimate(finalData,parameterName, 'Year', '2019','Year 2019', specialWeight='finalweight_Year') ,
     estimate2020 = subpopEstimate(finalData,parameterName, 'Year', '2020','Year 2020', specialWeight='finalweight_Year') ,
     
+    # change here each new cycle
+    
     # By Phase
-    estimatePhase1 = subpopEstimate(finalData,parameterName, 'Panel', 'Phase1','Phase One 2001-2008', specialWeight='finalweight_Panel1') ,
-    estimatePhase2 = subpopEstimate(finalData,parameterName, 'Panel', 'Phase2','Phase Two 2009-2018', specialWeight='finalweight_Panel2') ,
+    estimatePhase1 = subpopEstimate(finalData,parameterName, 'Panel', 'Phase1','Phase One 2001-2010', specialWeight='finalweight_Panel1') ,
+    estimatePhase2 = subpopEstimate(finalData,parameterName, 'Panel', 'Phase2','Phase Two 2011-2020', specialWeight='finalweight_Panel2') ,
+    
+    
+    # change here each new cycle
     # Bay/ NonBay
-    estimateBay = subpopEstimate(finalData,parameterName, 'BayShed', 'Bay','Bay Watersheds 2001-2018', specialWeight=FALSE),
-    estimateNonBay = subpopEstimate(finalData,parameterName, 'BayShed', 'NonBay','Non-Bay Watersheds 2001-2018', specialWeight=FALSE),
-    estimateBayPhase1 = subpopEstimate(finalData,parameterName, 'BayPanel', 'BayPhase1','Bay Watersheds 2001-2008', specialWeight='finalweight_Panel1'),
-    estimateBayPhase2 = subpopEstimate(finalData,parameterName, 'BayPanel', 'BayPhase2','Bay Watersheds 2009-2018', specialWeight='finalweight_Panel2'),
-    estimateNonBayPhase1 = subpopEstimate(finalData,parameterName, 'BayPanel', 'NonBayPhase1','Non-Bay Watersheds 2001-2008', specialWeight='finalweight_Panel1'),
-    estimateNonBayPhase2 = subpopEstimate(finalData,parameterName, 'BayPanel', 'NonBayPhase2','Non-Bay Watersheds 2009-2018', specialWeight='finalweight_Panel2'),
+    estimateBay = subpopEstimate(finalData,parameterName, 'BayShed', 'Bay','Bay Watersheds 2001-2020', specialWeight=FALSE),
+    estimateNonBay = subpopEstimate(finalData,parameterName, 'BayShed', 'NonBay','Non-Bay Watersheds 2001-2020', specialWeight=FALSE),
+    estimateBayPhase1 = subpopEstimate(finalData,parameterName, 'BayPanel', 'BayPhase1','Bay Watersheds 2001-2010', specialWeight='finalweight_Panel1'),
+    estimateBayPhase2 = subpopEstimate(finalData,parameterName, 'BayPanel', 'BayPhase2','Bay Watersheds 2011-2020', specialWeight='finalweight_Panel2'),
+    estimateNonBayPhase1 = subpopEstimate(finalData,parameterName, 'BayPanel', 'NonBayPhase1','Non-Bay Watersheds 2001-2010', specialWeight='finalweight_Panel1'),
+    estimateNonBayPhase2 = subpopEstimate(finalData,parameterName, 'BayPanel', 'NonBayPhase2','Non-Bay Watersheds 2011-2020', specialWeight='finalweight_Panel2'),
     
     # change here each new cycle
     
