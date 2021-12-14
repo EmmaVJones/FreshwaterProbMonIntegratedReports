@@ -67,8 +67,23 @@ listOfResults <- function(popstatus.est, finalData, parameterName){
     estimateShenandoah = subpopEstimate(finalData,parameterName, 'SubBasin', 'Shenandoah',NA, specialWeight=FALSE) ,
     estimateRappahannock = subpopEstimate(finalData,parameterName, 'SubBasin', 'Rappahannock',NA, specialWeight=FALSE) ,
     estimateYork = subpopEstimate(finalData,parameterName, 'SubBasin', 'York',NA, specialWeight=FALSE) ,
-    # change here each new cycle
     
+    # change here each new cycle
+    # By VAHUSB, using abbreviations to make the category names cleaner here
+    estimateRU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RU','RU', specialWeight=FALSE),
+    estimateJM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JM','JM', specialWeight=FALSE),
+    estimateNE = subpopEstimate(finalData,parameterName, 'VAHUSB', 'NE','NE', specialWeight=FALSE),
+    estimateRD = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RD','RD', specialWeight=FALSE),
+    estimateYO = subpopEstimate(finalData,parameterName, 'VAHUSB', 'YO','YO', specialWeight=FALSE),
+    estimatePL = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PL','PL', specialWeight=FALSE),
+    estimateCU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CU','CU', specialWeight=FALSE),
+    estimateRA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RA','RA', specialWeight=FALSE),
+    estimateBS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'BS','BS', specialWeight=FALSE),
+    estimateTH = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TH','TH', specialWeight=FALSE),
+    estimatePS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PS','PS', specialWeight=FALSE),
+    estimateJA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JA','JA', specialWeight=FALSE),
+    estimateCM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CM','CM', specialWeight=FALSE),
+    estimateTC = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TC','TC', specialWeight=FALSE),
     
     
     # By Ecoregion

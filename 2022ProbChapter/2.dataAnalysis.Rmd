@@ -179,7 +179,9 @@ The following functions run the CDF analyses for all parameters chosen from the 
 
 The critical thing to update each cycle is to add the new temporal variables we want to analyze on, e.g. IR2022, update years for panel information, add new basin levels, etc. It is easy to find where these need to be updated in the CDFanalysis.R script simply by searching for "# change here each new cycle" in the find bar. 
 
-New levels for this 2022 IR include estimate2019, estimate2020, estimatePhase1,estimatePhase2, estimateBay, estimateNonBay, estimateBayPhase1, estimateBayPhase2, estimateNonBayPhase1, estimateNonBayPhase2, estimateBioPanelPhase1, estimateBioPanelPhase2, estimateBioPanelPhase3, estimateBioPanelPhase4, estimateIR2022
+New levels for this 2022 IR include estimate2019, estimate2020, estimatePhase1,estimatePhase2, estimateBay, estimateNonBay, estimateBayPhase1, estimateBayPhase2, estimateNonBayPhase1, estimateNonBayPhase2, estimateBioPanelPhase1, estimateBioPanelPhase2, estimateBioPanelPhase3, estimateBioPanelPhase4, estimateIR2022.
+
+The new basins run are estimateRU, estimateJM, estimateNE, estimateRD, estimateYO, estimatePL, estimateCU, estimateRA, estimateBS, estimateTH, estimatePS, estimateJA, estimateCM, estimateTC as they are all above the magic 25-30 sample requirements to generate a CDF curve. This list could increase in the future.
 
 ```{r}
 source('CDFanalysis.R')
