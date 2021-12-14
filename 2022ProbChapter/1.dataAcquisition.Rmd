@@ -150,7 +150,7 @@ multistationAnalyteData <- pool %>% tbl(in_schema("wqm", "Wqm_Analytes_View")) %
 To consistently organize field, analyte, and metals data it is prudent to use the "conventionals" data rules.
 
 ```{r conventionals organization of raw data}
-source('C:/HardDriveBackup/R/GitHub/WQMdataQueryTool/conventionalsFunction1232021.R')
+source('C:/HardDriveBackup/R/GitHub/WQMdataQueryTool/conventionalsFunction12142021.R')
 
 conventionalsList <- conventionalsSummary(conventionals= pin_get("conventionals2022IRfinalWithSecchi", board = "rsconnect")[0,],
                                           stationFieldDataUserFilter= multistationFieldData, 
@@ -158,11 +158,12 @@ conventionalsList <- conventionalsSummary(conventionals= pin_get("conventionals2
                                           stationInfo = multiStationInfo,
                                           stationGIS_View = multiStationGIS_View,
                                           dropCodes = c('QF'),
-                                          assessmentUse = F) 
+                                          assessmentUse = F,
+                                          overwriteUncensoredZeros = TRUE) 
 conventionals <- conventionalsList$More %>% 
   arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
 
-#write.csv(conventionals, '2020conventionals2.csv', row.names = F, na = "")
+#write.csv(conventionals, 'processedData/2020conventionals.csv', row.names = F, na = "")
 ```
 
 ### QA data with Lucy
@@ -478,7 +479,7 @@ rm(SCI_filter)
 Now we can save both of these objects out and manually delete the erroneous rows in probData (things not close to benthic collections). We will average the station data in R after extra data is dropped.
 
 ```{r save for manual review}
-#write.csv(probData, 'processedData/prob20192020data.csv', row.names = F, na = '')
+#write.csv(probData, 'processedData/prob20192020dataFin.csv', row.names = F, na = '')
 #write.csv(SCI_filter, 'processedData/bio20192020data.csv', row.names = F, na = '')
 ```
 
@@ -560,37 +561,38 @@ Lucy cleaned the field/analyte/metals datasets and produced a final version with
 
 We still need to average parameters to one result per year for CDF analyses. These steps occur in the next chunk.
 
-
-### EVJ forgot TDS for Lucy's QA, so this is a special step to get TDS data back in before averaging. This will not be necessary in the future because the code is now fixed above to let TDS pass through from conventionals to manual review
+## This part became useless after conventionals12142021.R update
+* EVJ forgot TDS for Lucy's QA, so this is a special step to get TDS data back in before averaging. This will not be necessary in the future because the code is now fixed above to let TDS pass through from conventionals to manual review
 
 ```{r TDS smash}
-
-lucy1 <- read_excel('processedData/prob20192020data_LKSEdits.xlsx', sheet = 'prob20192020data_EVJEdits', skip = 1) %>% # skip first row
-  left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , TDS), 
-            by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
-                   "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc")) %>% 
-  
-left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , MetalCCU), 
-            by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
-                   "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc"))
-
-
-#write.csv(lucy1, 'processedData/TDSfix.csv', row.names = F, na = '')
-  rm(lucy1)
+# 
+# lucy1 <- read_excel('processedData/prob20192020data_LKSEdits.xlsx', sheet = 'prob20192020data_EVJEdits', skip = 1) %>% # skip first row
+#   left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , TDS), 
+#             by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
+#                    "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc")) %>% 
+#   
+# left_join(dplyr::select(probData, StationID:Ana_Sam_Mrs_Container_Id_Desc , MetalCCU), 
+#             by = c("StationID", "Year", "FDT_DATE_TIME", "FDT_DEPTH"  , "FDT_SPG_CODE", 
+#                    "FDT_COMMENT" , "Ana_Sam_Mrs_Container_Id_Desc"))
+# 
+# 
+# #write.csv(lucy1, 'processedData/TDSfix.csv', row.names = F, na = '')
+#   rm(lucy1)
 ```
 
 EVJ went in to sheet = prob20192020data_EVJEdits and put correct TDS info and cleaned up R/S1 information for that parameter as well. prob20192020data_EVJEdits is good to go for final data consolidation.
-
+## end of useless
 
 
 ```{r one row per year}
-lucy <- read_excel('processedData/prob20192020data_LKSEdits.xlsx', sheet = 'prob20192020data_EVJEdits', skip = 1) %>% # skip first row
+lucy <- read_excel('processedData/prob20192020data_LKSEdits.xlsx', sheet = 'prob20192020data_EVJfinalEdits', skip = 1) %>% # skip first row
   filter(! Ana_Sam_Mrs_Container_Id_Desc %in% c('S1', 'S2')) %>% 
   # make sure only one row per date/time
   group_by(StationID, FDT_DATE_TIME) %>% 
   mutate(n = n()) %>% 
-  dplyr::select(n , everything()) %>% ungroup()
+  dplyr::select(n , StationID: SSCTOTAL, MetalCCU, everything()) %>% ungroup()
   # if everything fine, proceed
+
   
 # can do everything but MERCURY and Hg-C here
 lucyAvg <- lucy %>% 
@@ -618,7 +620,7 @@ lucyFin <- left_join(lucyAvg, lucyHg, by = c('StationID', 'Year'))
 
 
 # save and manually review one last time
-#write.csv(lucyFin, 'processedData/FinalFieldAnalyteMetals.csv', row.names = F, na= '')
+#write.csv(lucyFin, 'processedData/FinalFieldAnalyteMetalsFinal.csv', row.names = F, na= '')
 # went through and manually checked all blanks, 0's, and random points to make sure data looks good
 
 # clean up workspace
@@ -740,7 +742,7 @@ prob2020 <- read.csv('prob2020PoFix.csv') %>%
 Bring in Field, Analyte, and Metals Data
 
 ```{r field}
-field <- read.csv('processedData/FinalFieldAnalyteMetals.csv') %>% 
+field <- read.csv('processedData/FinalFieldAnalyteMetalsFinal.csv') %>% #FinalFieldAnalyteMetals.csv') %>% 
   rename('Ortho-P' = 'Ortho.P',
          'Hg-C' = 'HgCom', 
          '70331VFine' = 'X70331VFine')
@@ -995,7 +997,7 @@ library(sf)
 
 vahusb <- st_read('C:/HardDriveBackup/GIS/Assessment/VAHUSB.shp') %>% 
   rename(VAHUSB_NAME = VAHUSB_)
-wshd4Order <- st_read("C:/HardDriveBackup/GIS/GIS_BaseLayer_Datasets.gdb",'VA_SUBBASINS_4TH_ORDER_STG')
+#wshd4Order <- st_read("C:/HardDriveBackup/GIS/GIS_BaseLayer_Datasets.gdb",'VA_SUBBASINS_4TH_ORDER_STG')
 
 prob2022sf <- prob2022 %>% 
     st_as_sf(coords = c("LongitudeDD", "LatitudeDD"), 
@@ -1036,6 +1038,19 @@ prob2022fin %>%
 #prob2022fin <- dplyr::select(prob2022fin, -Basin4thOrder)
 ```
 
+Remove the 1's in the IR columns and IR years for full dataset
+
+```{r}
+prob2022fin <- prob2022fin %>% 
+  mutate(IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(NA)),
+                            IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(NA)),
+                            IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(NA)),
+                            IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(NA)),
+                            IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(NA)),
+                            IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
+                            IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
+                            IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)))
+```
 
 
 
