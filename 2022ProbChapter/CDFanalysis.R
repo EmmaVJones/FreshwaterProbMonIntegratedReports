@@ -70,20 +70,20 @@ listOfResults <- function(popstatus.est, finalData, parameterName){
     
     # change here each new cycle
     # By VAHUSB, using abbreviations to make the category names cleaner here
-    estimateRU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RU','RU', specialWeight=FALSE),
-    estimateJM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JM','JM', specialWeight=FALSE),
-    estimateNE = subpopEstimate(finalData,parameterName, 'VAHUSB', 'NE','NE', specialWeight=FALSE),
-    estimateRD = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RD','RD', specialWeight=FALSE),
-    estimateYO = subpopEstimate(finalData,parameterName, 'VAHUSB', 'YO','YO', specialWeight=FALSE),
-    estimatePL = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PL','PL', specialWeight=FALSE),
-    estimateCU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CU','CU', specialWeight=FALSE),
-    estimateRA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RA','RA', specialWeight=FALSE),
-    estimateBS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'BS','BS', specialWeight=FALSE),
-    estimateTH = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TH','TH', specialWeight=FALSE),
-    estimatePS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PS','PS', specialWeight=FALSE),
-    estimateJA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JA','JA', specialWeight=FALSE),
-    estimateCM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CM','CM', specialWeight=FALSE),
-    estimateTC = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TC','TC', specialWeight=FALSE),
+    estimateRU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RU','Roanoke River, Upper', specialWeight=FALSE),
+    estimateJM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JM','James River, Middle (Piedmont)', specialWeight=FALSE),
+    estimateNE = subpopEstimate(finalData,parameterName, 'VAHUSB', 'NE','New River', specialWeight=FALSE),
+    estimateRD = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RD','Roanoke River- Dan River', specialWeight=FALSE),
+    estimateYO = subpopEstimate(finalData,parameterName, 'VAHUSB', 'YO','York River', specialWeight=FALSE),
+    estimatePL = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PL','Potomac River, Lower', specialWeight=FALSE),
+    estimateCU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CU','Chowan River, Upper', specialWeight=FALSE),
+    estimateRA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RA','Rappahannock River', specialWeight=FALSE),
+    estimateBS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'BS','Big Sandy River', specialWeight=FALSE),
+    estimateTH = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TH','Tennessee-Holston River', specialWeight=FALSE),
+    estimatePS = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PS','Potomac River-Shenandoah River', specialWeight=FALSE),
+    estimateJA = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JA','James River- Appomattox River', specialWeight=FALSE),
+    estimateCM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'CM','Chowan River-Meherrin River', specialWeight=FALSE),
+    estimateTC = subpopEstimate(finalData,parameterName, 'VAHUSB', 'TC','Tennessee-Clinch River', specialWeight=FALSE),
     
     
     # By Ecoregion
@@ -107,8 +107,8 @@ listOfResults <- function(popstatus.est, finalData, parameterName){
     # By Basin Size
     estimateBasin1 = subpopEstimate(finalData,parameterName, 'BasinSize', '1','<1 square mile', specialWeight=FALSE) ,
     estimateBasin2 = subpopEstimate(finalData,parameterName, 'BasinSize', '2','1 to 10 square mile', specialWeight=FALSE) ,
-    estimateBasin3 = subpopEstimate(finalData,parameterName, 'BasinSize', '3','10 to 200 square mile', specialWeight=FALSE) ,
-    estimateBasin4 = subpopEstimate(finalData,parameterName, 'BasinSize', '4','>200 square mile', specialWeight=FALSE) ,
+    estimateBasin3 = subpopEstimate(finalData,parameterName, 'BasinSize', '3','10 to 50 square mile', specialWeight=FALSE) ,
+    estimateBasin4 = subpopEstimate(finalData,parameterName, 'BasinSize', '4','>50 square mile', specialWeight=FALSE) ,
     # By Year
     estimate2001 = subpopEstimate(finalData,parameterName, 'Year', '2001','Year 2001', specialWeight='finalweight_Year') ,
     estimate2002 = subpopEstimate(finalData,parameterName, 'Year', '2002','Year 2002', specialWeight='finalweight_Year'), 

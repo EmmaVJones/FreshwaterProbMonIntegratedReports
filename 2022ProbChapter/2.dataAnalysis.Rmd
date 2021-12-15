@@ -251,6 +251,7 @@ VSCI60 <- VSCI[3:length(VSCI)] %>% # start with our big 'ol list of lists
 View(VSCI60)
 ```
 
+first make RDSarchive directory!!
 
 ### Run all parameters
 
@@ -404,100 +405,54 @@ write.csv(rrisk, file = "processedData/rrisk.csv", row.names = FALSE)
 
 Now time to make maps of sites sampled across the state for the introduction part of chapter. First you need to make shapefiles of all sites (wadeable and nonwadeable) ever sampled, then split by IR window, then pull watersheds from IR window from Landcover GIS database. I created the GIS project "MapDataOrganization.mxd" to overview the process.
 
-```{r, GISwrangling}
-
+```{r, GISwrangling- wadeable}
 allProb <- left_join(surveyData,designStatus,by=c('siteID','Year')) %>%
-  select(siteID, Year, `strahler order`:`Latitude-DD`,Basin:IR2018) %>%
+  select(siteID, Year, `strahler order`:`Latitude-DD`,Basin:IR2022) %>%
   mutate(StationID = gsub("_.*$", "", siteID)) %>% # make stationID column with no trend years
   select(StationID, everything())%>%
-  rename(Longitude=`Longitude-DD`,Latitude=`Latitude-DD`)
+  rename(Longitude=`Longitude-DD`,Latitude=`Latitude-DD`) %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), 
+               remove = F, # don't remove these lat/lon cols from df
+               crs = 4326)  # add projection, needs to be geographic for now bc entering lat/lng
 
-# make it a shapefile for maps (sf being a pain with projections right now)
-coordinates(allProb) <- ~Longitude+Latitude
-proj4string(allProb) <- CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0")
+#st_write(allProb, 'processedData/GIS/allProb2022.shp')
 
-# Now save it
-raster::shapefile(allProb, "processedData/allProb2018.shp", overwrite=T)
-
-# Limit to just sites sampled in 2018IR window in GIS
-# saved as processedData/IRstations2018.shp
+#st_layers('C:/HardDriveBackup/GIS/ProbMonGIS/DelineatedWatersheds/Watersheds.gdb')
 
 # Bring in watersheds to match to point files
-allWshd <- rgdal::readOGR('C:/GIS/ProbMonGIS/DelineatedWatersheds/Watersheds.gdb','AllWatersheds_through2016')
-# Get rid of any stray spaces after StationID in attribute table
-allWshd@data$StationID <- sub("\r\n" ,"",allWshd@data$StationID) 
+allWshd <- st_read('C:/HardDriveBackup/GIS/ProbMonGIS/DelineatedWatersheds/Watersheds.gdb',
+                   'AllWatersheds_through2020') %>% 
+  mutate(StationID = sub("\r\n" ,"",StationID) ) # Get rid of any stray spaces after StationID in attribute table
 
 
-allWshdforProb <- allWshd[allWshd@data$StationID %in% allProb@data$StationID,]
-allWshdforProb <- spTransform(allWshdforProb,CRS( "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"))
+allWshdforProb <- filter(allWshd, StationID %in% allProb$StationID)
+#allWshdforProb <- spTransform(allWshdforProb,CRS( "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"))
 
 # Now save it
-raster::shapefile(allWshdforProb, "processedData/allProbWshd2018.shp", overwrite=T)
-
-
-# now botable 
-
-# Bring in watershed data
-allWshd <- st_as_sf(rgdal::readOGR('C:/GIS/ProbMonGIS/DelineatedWatersheds/Watersheds.gdb','AllWatersheds_through2016')) # bring it in as sf object
-# Get rid of any stray spaces after StationID in attribute table
-allWshd$StationID <- sub("\r\n" ,"",allWshd$StationID) 
-
-# Limit to just ProbMon wadeable watersheds
-allProb_wshd <-  filter(allWshd, StationID %in% allProb$StationID) # allProb_sf$StationID
-
-# Limit to just watersheds sampled in 2018IR window
-probIRwshd <- filter(allProb_wshd,StationID %in% probIR_sf$StationID)
-
-# I still need these watersheds in teh GIS database and need to run landcover
-#allProb_sf[!(allProb_sf$StationID %in% allWshd$StationID),]$StationID
-#probIR_sf[!(probIR_sf$StationID %in% allWshd$StationID),]$StationID
-
+#st_write(allWshdforProb, "processedData/GIS/allProbWshd2022.shp")
 ```
 
 
 
+```{r  GISwrangling- non wadeable}
 
-Cool, now get boatable sites and watersheds organized (just for map visualization, not for reporting purposes). Working backwards from the designStatus dataframe, take all the NT sites.
-
-```{r boatableSites}
-# boatable layers oraganized for last IR
-boatable <- rgdal::readOGR('C:/HardDriveBackup/R/IR_2016/data','BoatableSites_20062015')
-boatableWshd <- rgdal::readOGR('C:/HardDriveBackup/R/IR_2016/data','IR2016_Bwshds')
-
-boatableSites <- filter(designStatus,status=='NT')%>% # first get all NonTarget
-  filter(grepl('Boat',comment) | grepl('Large River',comment) | grepl('Fall only',comment)) %>%
-  mutate(StationID = siteID) %>%
-  filter(!grepl('VAW',siteID))
-boatableSites$StationID <- substr(boatableSites$StationID, start=1, stop=11) # get rid of other characters at end
-
-# now find sites that arent in match boatable existing boatable layer
-addToboatable <- unique(boatableSites[!(boatableSites$StationID %in% boatable@data),]$StationID)
-
-boatableSites2018 <- filter(boatableSites,StationID %in% addToboatable)
-
-# Boatable Sites
-boatableSites <- boatableSites %>%
-  rename(Longitude=`Longitude-DD`,Latitude=`Latitude-DD`)
-
-# make it a shapefile for maps (sf being a pain with projections right now)
-coordinates(boatableSites) <- ~Longitude+Latitude
-proj4string(boatableSites) <- CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0")
-
-# Now save it
-raster::shapefile(boatableSites, "processedData/boatableSites2018.shp", overwrite=T)
-
-# Now combine "processedData/boatableSites2018.shp" and 'C:/HardDriveBackup/R/IR_2016/data/BoatableSites_20062015.shp' in GIS to get real boatable site layer named 'processedData/boatableSites2006_2016.shp'
-
-boatableSites <- rgdal::readOGR("processedData","boatableSites2006_2016")
+# boatable sites 
+boatableWshdStationID <- filter(designStatus, status == 'NT' ) %>% 
+  filter(str_detect(comment, 'Large') | str_detect(comment, 'Boat')) %>% 
+  filter(! str_detect(comment, 'Lake')) %>% 
+  filter(! str_detect(comment, 'not sampled')) %>% 
+  filter(! str_detect(comment, 'dry')) %>% 
+  filter(! str_detect(comment, 'tidal')) %>% 
+                          # NT isn't perfect filter but if there is a boatable watershed then it was sampled
+                          mutate(StationID = gsub("_.*$", "", siteID)) %>% 
+                          pull(StationID)
+boatableWshd <- filter(allWshd, StationID %in% boatableWshdStationID) %>% 
+  dplyr::select(StationID) %>% 
+  st_transform(st_crs(boatableWshd)) %>% 
+  rename(geometry= Shape)
 
 
-
-# now find watersheds that match boatable StationID's
-boatableWshd <- allWshd[allWshd@data$StationID %in% boatableSites$StationID,]
-boatableWshd <- spTransform(boatableWshd,CRS( "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"))
-
-# Now save it
-raster::shapefile(boatableWshd, "processedData/boatableWshd2006_2016.shp", overwrite=T)
+st_write(boatableWshd, "processedData/GIS/boatableWshd2006_2020.shp")
 
 ```
 
