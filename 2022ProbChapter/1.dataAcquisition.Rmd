@@ -435,21 +435,24 @@ SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! U
 
 
 # after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
-SCI_filter <- filter(SCI_filter, StationID != "1AXOR000.47") %>% 
+SCI_filter <- filter(SCI_filter, ! StationID %in% c("1AXOR000.47", '8-POR015.70')) %>% 
   bind_rows(
-    filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, StationID == "1AXOR000.47")$BenSampID) %>%
-  mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
-  left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
-              by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
-
-  # make year variable to make review easier
-  mutate(Year = year(`Collection Date`)) %>% 
-  dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
-                Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
-  arrange(Year, StationID, `Collection Date`)
+    bind_rows(
+      filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, StationID == "1AXOR000.47")$BenSampID),
+      filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin, StationID == '8-POR015.70')$BenSampID)) %>%
+      mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
+      left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
+                by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
+      
+      # make year variable to make review easier
+      mutate(Year = year(`Collection Date`)) %>% 
+      dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
+                    Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+      arrange(Year, StationID, `Collection Date`)
   ) %>% 
   dplyr::select(Year, StationID, `Collection Date`, BenSampID, SCI, `SCI Score`) %>% # only actually need these metrics
   arrange(Year, StationID, `Collection Date`) 
+
 
 # We report VSCI metrics regardless of SCI used for continuity 
 SCImetrics <- filter(VSCIresults, BenSampID %in% SCI_filter$BenSampID) %>% 
@@ -480,7 +483,7 @@ Now we can save both of these objects out and manually delete the erroneous rows
 
 ```{r save for manual review}
 #write.csv(probData, 'processedData/prob20192020dataFin.csv', row.names = F, na = '')
-#write.csv(SCI_filter, 'processedData/bio20192020data.csv', row.names = F, na = '')
+#write.csv(SCIfinal, 'processedData/bio20192020data.csv', row.names = F, na = '')
 ```
 
 ### Habitat Data
@@ -661,7 +664,7 @@ bugAvg <- SCIfinal %>%
                 VEphem = `%Ephem`,
                 VPTHydropsychidae = `%PT - Hydropsychidae`,
                 VScrap = `%FamilyScraper`,
-                VChiro = `%Chironomidae Score`,
+                VChiro = `%Chiro`,
                 V2Dom = `Family %2 Dominant`,
                 HBI = `Family HBI`,
                 #VHapto = ????????? # dropped from this report bc could not make joins to old EDAS taxa info easily after EDAS-CEDS data updates
@@ -777,7 +780,7 @@ prob2020fin <- prob2020 %>%
   dplyr::select(-VHapto) %>% 
   mutate(IR2022 = 1) %>% 
   dplyr::select(DataSource:IR2020, IR2022, DO:STXRD )
-names(prob2020fin) # what to match
+#names(prob2020fin) # what to match
 rm(prob2020)
 
 finalSmash <- dplyr::select(WQM_Stations_Filter, DataSource:set) %>% 
@@ -1116,7 +1119,10 @@ We also need to update the design status window information to match the new win
 designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/biology20012018final.xlsx', sheet = 'biology2020') %>% 
   left_join(dplyr::select(prob2022fin, StationID_Trend, AREA_SQ_MILES),
             by = c('sampleID' = 'StationID_Trend')) %>% 
-  mutate(IR2022 = NA, VAHUSB = NA, VAHUSB_NAME = NA,
+  mutate(IR2022 = case_when(between(Year, 2015, 2020) ~ 2022, TRUE ~ as.numeric(NA)), 
+         
+         VAHUSB = NA, VAHUSB_NAME = NA,
+         
          IR2008 = case_when(IR2008 == 2008 ~ 2008, TRUE ~ as.numeric(NA)),
          IR2010 = case_when(IR2010 == 2010 ~ 2010, TRUE ~ as.numeric(NA)),
          IR2012 = case_when(IR2012 == 2012 ~ 2012, TRUE ~ as.numeric(NA)),
@@ -1143,7 +1149,7 @@ designStatusOld <- read_excel('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonInte
                                               TRUE ~ as.character(NA)),
                             BayPanel = paste0(BayShed, Panel),
                             StreamSizeCatPhase = paste0(Panel,StreamSizeCat )) %>% 
-  dplyr::select(-AREA_SQ_MILES)
+  dplyr::select(-c(AREA_SQ_MILES))
 
 
 

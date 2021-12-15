@@ -1,5 +1,5 @@
 ---
-title: "2020 Integrated Report Probabilistic Monitoring Chapter"
+title: "2022 Integrated Report Freshwater Probabilistic Monitoring Chapter"
 author: "Jason Hill, Emma Jones, Lucy Baker & Mary Dail"
 date: "January 20, 2021"
 output: word_document
@@ -30,20 +30,20 @@ suppressPackageStartupMessages(library(extrafont))#0.17
 
 
 # Data needed for maps (needs to be in report for figure generation vs in global file)
-basinssmooth <- st_read('originalData/VAbasins_smoothNoChesPeeDee.shp')# basin shapefile ggplot maps (sf)
-basinssmooth_sp <- readOGR('originalData','VAbasins_smoothNoChesPeeDee')# basin shapefile for micromaps (sp)
-VAoutline <- st_read('originalData/Va_otlne.shp') # for basic site maps
-VAbasins <- st_read('originalData/basinsstatewide.shp') # for basic site maps
-VAecoregionsL3 <- st_read('originalData/VA_level3ecoregion.shp') # for basic site maps
+basinssmooth <- st_read('originalData/GIS/VAbasins_smoothNoChesPeeDee.shp')# basin shapefile ggplot maps (sf)
+basinssmooth_sp <- readOGR('originalData/GIS','VAbasins_smoothNoChesPeeDee')# basin shapefile for micromaps (sp)
+VAoutline <- st_read('originalData/GIS/Va_otlne.shp') # for basic site maps
+VAbasins <- st_read('originalData/GIS/basinsstatewide.shp') # for basic site maps
+VAecoregionsL3 <- st_read('originalData/GIS/VA_level3ecoregion.shp') # for basic site maps
 
 ### update to 2020 when available
 
-allProb <- read_csv('processedData/Wadeable_ProbMon_2001-2018.csv') %>% # for basic site maps
-  dplyr::select(DataSource:IR2020) %>%
+allProb <- read_csv('processedData/Wadeable_ProbMon_2001-2020.csv') %>% # for basic site maps
+  dplyr::select(DataSource:IR2022) %>%
   st_as_sf(coords = c("LongitudeDD", "LatitudeDD"),  # make spatial layer using these columns
              remove = T, # don't remove these lat/lon cols from df
              crs = 4326) # add coordinate reference system, needs to be geographic for now bc entering lat/lng, 
-boatableSites <- st_read('processedData/boatableSites2008_2018.shp')
+boatableSites <- st_read('processedData/GIS/boatableSites2006_2020.shp')
 
 
 source('global.R')

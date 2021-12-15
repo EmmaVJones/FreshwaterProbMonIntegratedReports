@@ -395,7 +395,7 @@ relrisk.estimates<-relrisk.analysis(sites=sites.va.rr,subpop=subpop.va.rr,
                                     stressor.levels=rep(list(c("Poor","Good")),length(stres.vars)))
 
 
-write.csv(relrisk.estimates, file = "processedData/relriskIR2020.csv", row.names = FALSE)
+write.csv(relrisk.estimates, file = "processedData/relriskIR2022.csv", row.names = FALSE)
 write.csv(rrisk, file = "processedData/rrisk.csv", row.names = FALSE)
 
 ```
@@ -435,9 +435,12 @@ allWshdforProb <- filter(allWshd, StationID %in% allProb$StationID)
 
 
 ```{r  GISwrangling- non wadeable}
+#bring in old boatable sites and add these to that dataset
+boatableSites <- st_read('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2020ProbChapter/processedData/boatableSites2008_2018.shp') %>% 
+  dplyr::select(StationID)
 
-# boatable sites 
-boatableWshdStationID <- filter(designStatus, status == 'NT' ) %>% 
+# new boatable sites 
+boatableSitesNew <- filter(designStatus, status == 'NT' ) %>% 
   filter(str_detect(comment, 'Large') | str_detect(comment, 'Boat')) %>% 
   filter(! str_detect(comment, 'Lake')) %>% 
   filter(! str_detect(comment, 'not sampled')) %>% 
@@ -445,13 +448,26 @@ boatableWshdStationID <- filter(designStatus, status == 'NT' ) %>%
   filter(! str_detect(comment, 'tidal')) %>% 
                           # NT isn't perfect filter but if there is a boatable watershed then it was sampled
                           mutate(StationID = gsub("_.*$", "", siteID)) %>% 
-                          pull(StationID)
+  st_as_sf(coords = c("Longitude-DD", "Latitude-DD"), 
+               remove = T, # don't remove these lat/lon cols from df
+               crs = 4326) %>%   # add projection, needs to be geographic for now bc entering lat/lng
+  dplyr::select(StationID = siteID)
+
+boatableSitesNew <- rbind(boatableSites, boatableSitesNew) %>% 
+  #distinct(StationID) %>% # distinct is not working
+  group_by(StationID) %>% 
+  mutate(n = n()) %>% 
+  filter(n == 1)
+
+boatableWshdStationID <- boatableSitesNew %>% 
+   pull(StationID)
 boatableWshd <- filter(allWshd, StationID %in% boatableWshdStationID) %>% 
   dplyr::select(StationID) %>% 
   st_transform(st_crs(boatableWshd)) %>% 
   rename(geometry= Shape)
 
 
+st_write(boatableSitesNew, "processedData/GIS/boatableSites2006_2020.shp")
 st_write(boatableWshd, "processedData/GIS/boatableWshd2006_2020.shp")
 
 ```
