@@ -131,7 +131,7 @@ filter(metalsAssessment, Year >= 2015 & Year <= 2020 & Acute_Exceed==1)
 # IR Window Chronic Exceedances
 filter(metalsAssessment, Year >= 2015 & Year <= 2020 & Chronic_Exceed==1)
 
-
+#write.csv(metalsAssessment, 'processedData/metalsAssessmentResults.csv')
 ```
 
 
@@ -568,7 +568,7 @@ statslookup <- function(indicator,measure,category,revOrder){
 ```
 
 ```{r VSCIstatusMicromap} 
-basinssmooth <- readOGR('originalData','VAbasins_smoothNoChesPeeDee') # have to use sp for micromaps
+basinssmooth <- readOGR('originalData/GIS','VAbasins_smoothNoChesPeeDee') # have to use sp for micromaps
 map.table <- create_map_table(basinssmooth,'BASIN')
 
 dat <- read_csv('processedData/allCDF.csv')

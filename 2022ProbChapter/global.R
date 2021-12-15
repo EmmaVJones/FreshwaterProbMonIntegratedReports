@@ -14,8 +14,8 @@ IRrange <- '2015 - 2020'
 dat <- read.csv('processedData/allCDF.csv')# CDF results
 surveyData <- read_csv('processedData/Wadeable_ProbMon_2001-2020.csv') %>%
   select(StationID_Trend,Year,DO:MetalCCU,CALCIUM:MERCURY,wshdImpPCT) %>% 
-  dplyr::rename(siteID=StationID_Trend,Ortho_P= "Ortho-P",
-                X70331VFine=`70331VFine`)
+  dplyr::rename(siteID=StationID_Trend,Ortho_P= "Ortho.P")#,
+                #X70331VFine=`70331VFine`)
 designStatus <- read_csv('processedData/designStatusIR2022.csv') %>%
   dplyr::rename(siteID=sampleID ) # start playing nicely with spsurvey)
 
@@ -67,6 +67,14 @@ vlookup <- function(ref, #the value or values that you want to look for
 # Add line to ggplot function
 addline_format <- function(x,...){
   gsub('\\s','\n',x)}
+
+# print numbers as words < 20, https://stackoverflow.com/questions/21658134/print-number-as-word-if-less-than-10
+numbers = c('zero', 'one', 'two', 'three', 'four', 'five',
+            'six', 'seven', 'eight', 'nine', 'ten',
+            'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+            'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty')
+readable = function (x) ifelse(x < 21, numbers[x + 1], x)
+
 
 # Get data in correct format for micromap plots function
 
@@ -382,8 +390,8 @@ togetherstacked$Parameter <- factor(togetherstacked$Parameter,
 togetherstackedflip <- together
 togetherstackedflip$Parameter <- factor(togetherstackedflip$Parameter,
                                         levels=c('Cumulative \nDissolved Metals','Total Nitrogen',
-                                                 'Ionic\nStrength','Total\nPhosphorus',
-                                                 'Streambed\nSedimentation','Habitat Disturbance'))
+                                                 'Ionic\nStrength','Streambed\nSedimentation',
+                                                 'Total\nPhosphorus', 'Habitat Disturbance'))
 
 
 # RELATIVE RISK PLOT

@@ -13,6 +13,8 @@ always_allow_html: yes
 
 knitr::opts_chunk$set(echo = FALSE)
 
+#suppressPackageStartupMessages(library(rmarkdown))
+
 suppressPackageStartupMessages(library(tidyverse))#1.3.0
 suppressPackageStartupMessages(library(sf))#0.8-0
 suppressPackageStartupMessages(library(sp)) #1.3-2
@@ -44,7 +46,7 @@ allProb <- read_csv('processedData/Wadeable_ProbMon_2001-2020.csv') %>% # for ba
              remove = T, # don't remove these lat/lon cols from df
              crs = 4326) # add coordinate reference system, needs to be geographic for now bc entering lat/lng, 
 boatableSites <- st_read('processedData/GIS/boatableSites2006_2020.shp')
-
+metalsAssessment <- read_csv('processedData/metalsAssessmentResults.csv')
 
 source('global.R')
 
@@ -62,7 +64,7 @@ put_gap()
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Probabilistic Monitoring (ProbMon) employs random site selection to produce statistically unbiased estimates of water quality conditions proportional to their occurrence across the Commonwealth. The agency’s other water monitoring programs are focused on water quality at selected study sites, for example evaluating water quality at long-term trend stations or in specific watersheds, or assessing the effects of identified pollution sources or mitigation efforts. These programs are inappropriate for statistically estimating water quality on a statewide basis. ProbMon is a valuable tool for evaluating large-scale watershed management activities, for testing new monitoring and assessments methods in a variety of ecological settings and for supporting agency activities such as Total Maximum Daily Load (TMDL) studies and determining permit limits. The survey design, analysis, geovisualization, and reporting of ProbMon data uses open source software, which promotes the scientific transparency and reproducibility of this monitoring program[^1]. 
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Since 2001, the DEQ ProbMon program has sampled `r nrow(surveyData)` randomly selected wadeable sites (Figure 2.4-5) to provide statistically valid estimates of statewide biological condition and stressor extent.  The robust dataset can provide insight into water quality status at US Level III ecoregion and river basin-specific scales, a first for the Commonwealth.  Over `r signif(nrow(filter(designStatus,IR2020 == '2020')),digits=2)` sites were sampled during the `r IRyear` assessment period (Figure 2.4-2). Based on the ProbMon data set, the majority of Virginia streams meet applicable numeric water quality criteria associated with aquatic life use. However, nearly `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct, digits =1)`% of Virginia streams fail to meet biological condition expectations, using a defined assessment threshold for aquatic organism (benthic) communities as indicators of stream health (VSCI/VCPMI).  Additionally, many streams exceed screening values for parameters that have been shown in various studies to have the potential to act as stressors on aquatic life communities.  These parameters, which include streambed sedimentation, habitat disturbance, and nutrients, are evaluated on a statewide basis using ProbMon data (Figure 2.4-1). 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Since 2001, the DEQ ProbMon program has sampled `r nrow(surveyData)` randomly selected wadeable sites (Figure 2.4-5) to provide statistically valid estimates of statewide biological condition and stressor extent.  The robust dataset can provide insight into water quality status at US Level III ecoregion and river basin-specific scales.  Over `r signif(nrow(filter(designStatus,IR2022 == '2022')),digits=2)` sites were sampled during the `r IRyear` assessment period (Figure 2.4-2). Based on the ProbMon data set, the majority of Virginia streams meet applicable numeric water quality criteria associated with aquatic life use. However, nearly `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct, digits =1)`% of Virginia streams fail to meet biological condition expectations, using a defined assessment threshold for aquatic organism (benthic) communities as indicators of stream health (VSCI/VCPMI).  Additionally, many streams exceed screening values for parameters that have been shown in various studies to have the potential to act as stressors on aquatic life communities.  These parameters, which include streambed sedimentation, habitat disturbance, and nutrients, are evaluated on a statewide basis using ProbMon data (Figure 2.4-1). 
 
 
 ##### Figure 2.4-1. Percentage of stream miles with water quality parameters exceeding criteria, assessment thresholds or screening values. Orange bars indicate parameters with screening values only (no numeric water quality criteria or assessment thresholds), and green bars indicate parameters with numeric water quality criteria (pH, DO) or assessment thresholds (VSCI/VCPMI). Horizontal lines associated with each parameter illustrates 95% confidence limits. Figure represents data collected from `r IRrange`. 
@@ -106,18 +108,18 @@ suppressWarnings(
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;In Virginia, ProbMon sites are randomly selected using EPA’s probability survey design program (Stevens 1997; USEPA 2006; Kincaid & Olsen 2016; R Core Team 2019). The stratified sampling method controls for the propensity for smaller streams to dominate the sample sites chosen at random; however, there is no geographical bias to the sample frame. Intensification of sampling effort at finer spatial scales is possible in a probabilistic survey design, but Virginia has not expanded sampling efforts in any particular region of the Commonwealth. As such, accumulating enough samples in regions that are smaller across the landscape has taken a longer period of time. Temporal variability is shared among all samples of a given survey period despite the differences in raw sample numbers among different spatial groupings. Delays in reporting at finer spatial scales are necessary to ensure all subpopulations (data collected at a given scale) have the minimum number of samples to report statistically defensible estimates (Feller 1968). The number of sampling stations selected for a given area is in proportion to the density of streams in that area and these proportions are consistent from year to year.
 
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;From 2001 to `r IRyearWindowEnd`, DEQ has evaluated `r signif(nrow(designStatus),digits=4)` stations and sampled `r nrow(surveyData)` sites (Figure 2.4-5). In some cases, stations were evaluated, but not sampled for a variety of reasons including: the stream was not perennial, it was saltwater influenced, or the landowner denied access. DEQ typically samples 50 to 60 random stations per year throughout Virginia for a variety of chemical, biological, and habitat parameters. The number of stations sampled per year meet the minimum required to calculate an annual statewide estimate of water quality condition (Feller 1968). From January 1st, `r IRyearWindowBegin` until December 31st, `r IRyearWindowEnd` DEQ evaluated 494 sites and sampled `r nrow(filter(designStatus,IR2020 == '2020'))` stations (Figure 2.4-2). The amount of data collected in a six year Integrated Report window allows for the calculation of condition estimates across stream size and ecoregion, while combining all data from the advent of the program (2001 - `r IRyearWindowEnd`; `r nrow(surveyData)` monitoring stations) allows for more data intensive calculations of basin-scale status estimates and relative risk. Analyses conducted over this larger time window are not meant to represent current conditions, rather they are meant to indicate what water quality conditions have been over the `r as.numeric(IRyearWindowEnd) - 2001 +1` year period. Figures 2.4-3 and 2.4-4 plot the `r nrow(filter(designStatus,IR2020 == '2020'))` stations sampled from `r IRrange` with major river basins and US Level III Ecoregions, respectively. Temporal change analysis across the landscape will be possible with continued probabilistic monitoring effort.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;From 2001 to `r IRyearWindowEnd`, DEQ has evaluated `r signif(nrow(designStatus),digits=4)` stations and sampled `r nrow(surveyData)` sites (Figure 2.4-5). In some cases, stations were evaluated, but not sampled for a variety of reasons including: the stream was not perennial, it was saltwater influenced, or the landowner denied access. DEQ typically samples 50 to 60 random stations per year throughout Virginia for a variety of chemical, biological, and habitat parameters. The number of stations sampled per year meet the minimum required to calculate an annual statewide estimate of water quality condition (Feller 1968). From January 1st, `r IRyearWindowBegin` until December 31st, `r IRyearWindowEnd` DEQ evaluated **494** sites and sampled `r nrow(filter(designStatus,IR2022 == '2022'))` stations (Figure 2.4-2). The amount of data collected in a six year Integrated Report window allows for the calculation of condition estimates across stream size and ecoregion, while combining all data from the advent of the program (2001 - `r IRyearWindowEnd`; `r nrow(surveyData)` monitoring stations) allows for more data intensive calculations of basin-scale status estimates and relative risk. Analyses conducted over this larger time window are not meant to represent current conditions, rather they are meant to indicate what water quality conditions have been over the `r as.numeric(IRyearWindowEnd) - 2001 +1` year period. Figures 2.4-3 and 2.4-4 plot the `r nrow(filter(designStatus,IR2022 == '2022'))` stations sampled from `r IRrange` with major river basins and US Level III Ecoregions, respectively. Temporal change analysis across the landscape will be possible with continued probabilistic monitoring effort.
 
-##### Figure 2.4-2. Virginia probabilistic monitoring locations from `r IRrange` (n = `r nrow(filter(allProb, IR2020 == 2020))`).
+##### Figure 2.4-2. Virginia probabilistic monitoring locations from `r IRrange` (n = `r nrow(filter(allProb, IR2022 == 2022))`).
 
 ```{r fig2.4-2, fig.width=5.75, fig.height=2.75}  
 ggplot() +
   geom_sf(data = VAoutline, color = 'wheat3', fill = 'wheat1') +
-  geom_sf(data = filter(allProb, IR2020 == 2020), 
-          aes(color = 'IR2020 Probabilistic Sites (Wadeable)'),
+  geom_sf(data = filter(allProb, IR2022 == 2022), 
+          aes(color = 'IR2022 Probabilistic Sites (Wadeable)'),
           size = 1, show.legend = "point") +
   coord_sf(datum = NA) + # take away grid
-  scale_colour_manual(values = c('IR2020 Probabilistic Sites (Wadeable)' = 'black'),
+  scale_colour_manual(values = c('IR2022 Probabilistic Sites (Wadeable)' = 'black'),
                       guide = guide_legend(override.aes = list(linetype = 'blank',
                                                                shape = 19))) +
   theme_minimal() +
@@ -125,7 +127,7 @@ ggplot() +
         legend.position =  'bottom')
 ```
 
-##### Figure 2.4-3. Virginia probabilistic monitoring locations from `r IRrange`  with Virginia major river basins (n = `r nrow(filter(allProb, IR2020 == 2020))`).
+##### Figure 2.4-3. Virginia probabilistic monitoring locations from `r IRrange`  with Virginia major river basins (n = `r nrow(filter(allProb, IR2022 == 2022))`).
 
 
 ```{r fig2.4-3, fig.width=7, fig.height=3.75}
@@ -136,14 +138,14 @@ col.regions = brewer.pal(n = 12,#length(unique(VAbasins@data$BASIN)),
 ggplot() +
   geom_sf(data = mutate(basinssmooth, Basin = BASIN), 
           aes(fill = Basin) , show.legend = 'polygon') +
-  geom_sf(data = filter(allProb, IR2020 == 2020), 
-          aes(color = 'IR 2020 Probabilistic\n Sites (Wadeable)'),
+  geom_sf(data = filter(allProb, IR2022 == 2022), 
+          aes(color = 'IR 2022 Probabilistic\n Sites (Wadeable)'),
           size = 1, show.legend = 'point') +
   coord_sf(datum = NA) + # take away grid
   scale_fill_manual(values= col.regions, name = NULL,
                     guide = guide_legend(override.aes = list(linetype = 'solid',
                                                              shape = NA))) +
-  scale_colour_manual(values = c('IR 2020 Probabilistic\n Sites (Wadeable)' = 'black'),
+  scale_colour_manual(values = c('IR 2022 Probabilistic\n Sites (Wadeable)' = 'black'),
                       guide = guide_legend(override.aes = list(linetype = 0, 
                                                                shape = 19))) +
   theme_minimal() +
@@ -152,7 +154,7 @@ ggplot() +
   guides(color=guide_legend(override.aes=list(fill=NA, shape = 19))) # still cant get box to go away on dots
 ```
 
-##### Figure 2.4-4. Virginia probabilistic monitoring locations from `r IRrange`  with US Level III Ecoregions (n = `r nrow(filter(allProb, IR2020 == 2020))`).
+##### Figure 2.4-4. Virginia probabilistic monitoring locations from `r IRrange`  with US Level III Ecoregions (n = `r nrow(filter(allProb, IR2022 == 2022))`).
 
 
 ```{r fig2.4-4, fig.width=7, fig.height=3.75}
@@ -168,14 +170,14 @@ ggplot() +
                                                               'Northern\n Piedmont',
                                                             TRUE ~ as.character(US_L3NAME))), 
           aes(fill = `Ecoregion (Level III)`) , show.legend = 'polygon') +
-  geom_sf(data = filter(allProb, IR2020 == 2020), 
-          aes(color = 'IR 2020 Probabilistic\n Sites (Wadeable)'),
+  geom_sf(data = filter(allProb, IR2022 == 2022), 
+          aes(color = 'IR 2022 Probabilistic\n Sites (Wadeable)'),
           size = 1, show.legend = 'point') +
   coord_sf(datum = NA) + # take away grid
   scale_fill_manual(values= col.regions, name = NULL,
                     guide = guide_legend(override.aes = list(linetype = 'solid',
                                                              shape = NA))) +
-  scale_colour_manual(values = c('IR 2020 Probabilistic\n Sites (Wadeable)' = 'black'),
+  scale_colour_manual(values = c('IR 2022 Probabilistic\n Sites (Wadeable)' = 'black'),
                       guide = guide_legend(override.aes = list(linetype = 0, 
                                                                shape = 19))) +
   theme_minimal() +
@@ -186,7 +188,7 @@ ggplot() +
 
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Estimates of percent river miles not meeting water quality criteria are reported with 95% confidence intervals using a local area variance estimator statistical technique. For example, Figure 2.4-1 illustrates the percentage of stream miles in Virginia failing to meet biomonitoring criteria expectations are `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct, digits = 3)`% +/- `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 2)`%, such that we are 95% confident that the true percentage of streams in Virginia failing the VSCI/VCPMI criteria is between `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct - filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 3)`% and `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct + filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 3)`%. The sampling frame provided by EPA for Virginia streams and rivers includes 49,100 miles (derived from NHD 1:100,000 scale coverage[^2]). It is important to note that the total amount of assessed river miles may vary to some extent by parameter. This number varies based on whether a monitoring tool was appropriate for the sampling location. For example, DEQ biological monitoring tools are not validated for streams without a defined channel, thus streams dominated by wetlands cannot be assessed (approximately 5,000 miles). The actual number of target stream miles (perennial, flowing freshwater) is much less because several thousands of stream miles are not perennial (e.g. the stream was dry when DEQ visited) or were found to be saltwater influenced. There is an estimated 1,200 miles of non-wadeable streams (also referred to as boatable sites), which must be sampled using large river habitat and biological sampling methods. Non-wadeable and wadeable sites, and associated watersheds, sampled since 2001 are presented in Figure 2.4-6. Large river data collection, using a non-wadeable (boatable) methodology, is underway and the condition will be included in future 303(d) / 305(b) Integrated Report chapters. The ProbMon chapter provides estimates for all perennial, non-tidal, wadeable stream and river miles, which equates to approximately 41,500 miles. 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Estimates of percent river miles not meeting water quality criteria are reported with 95% confidence intervals using a local area variance estimator statistical technique. For example, Figure 2.4-1 illustrates the percentage of stream miles in Virginia failing to meet biomonitoring criteria expectations are `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct, digits = 3)`% +/- `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 2)`%, such that we are 95% confident that the true percentage of streams in Virginia failing the VSCI/VCPMI criteria is between `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct - filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 3)`% and `r signif(filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$pct + filter(paramsummary, Parameter == 'VSCI/VCPMI\n(Biomonitoring)')$MoE, digits = 3)`%. The sampling frame provided by EPA for Virginia streams and rivers includes 49,100 miles (derived from NHD 1:100,000 scale coverage[^2]). It is important to note that the total amount of assessed river miles may vary to some extent by parameter. This number varies based on whether a monitoring tool was appropriate for the sampling location. For example, DEQ biological monitoring tools are not validated for streams without a defined channel, thus streams dominated by wetlands cannot be assessed (approximately 5,000 miles). The actual number of target stream miles (perennial, flowing freshwater) is much less because several thousands of stream miles are not perennial (e.g. the stream was dry when DEQ visited) or were found to be saltwater influenced. There is an estimated 1,200 miles of non-wadeable streams, which must be sampled using large river habitat and biological sampling methods (also referred to as boatable sites). Non-wadeable and wadeable sites, and associated watersheds, sampled since 2001 are presented in Figure 2.4-6. Large river data collection, using a non-wadeable (boatable) methodology, is underway and the condition will be included in future 303(d) / 305(b) Integrated Report chapters. The ProbMon chapter provides estimates for all perennial, non-tidal, wadeable stream and river miles, which equates to approximately 41,500 miles. 
 
 [^2]:The 1:100,000 scale coverage is appropriate for Probablistic Monitoring site selection to ensure placement of sites along periennial waterbodies. This differs from the conventional statewide assessment which uses the 1:24,000 scale coverage, including 100,964 river miles.
 
@@ -209,8 +211,11 @@ ggplot() +
           aes(color = 'IR 2018 Wadeable Sites'), size = 1, show.legend = "point") +
   geom_sf(data = filter(allProb, IR2020 == 2020), 
           aes(color = 'IR 2020 Wadeable Sites'), size = 1, show.legend = "point") +
+  geom_sf(data = filter(allProb, IR2022 == 2022), 
+          aes(color = 'IR 2022 Wadeable Sites'), size = 1, show.legend = "point") +
   coord_sf(datum = NA) + # take away grid
-  scale_colour_manual(values = c('IR 2020 Wadeable Sites' = 'black',
+  scale_colour_manual(values = c('IR 2022 Wadeable Sites' = 'black',
+                                 'IR 2020 Wadeable Sites' = 'pink',
                                  'IR 2018 Wadeable Sites' = 'cyan',
                                  'IR 2016 Wadeable Sites' = 'orange',
                                  'IR 2014 Wadeable Sites' = 'purple',
@@ -232,12 +237,12 @@ ggplot() +
 ```{r fig2.4-6, fig.width=7, fig.height=4}  
 ggplot() +
   geom_sf(data = VAoutline, color = 'wheat3', fill = 'wheat1') +
-  geom_sf(data = allProb, aes(color = 'Probabilistic Wadeable\n Sites (2001 - 2018)'),
+  geom_sf(data = allProb, aes(color = 'Probabilistic Wadeable\n Sites (2001 - 2020)'),
           size = 1, show.legend = "point") +
-  geom_sf(data = boatableSites, aes(color = 'Probabilistic Boatable\n Sites (2008 - 2018)'),
+  geom_sf(data = boatableSites, aes(color = 'Probabilistic Boatable\n Sites (2008 - 2020)'),
           size = 1, show.legend = "point") +
-  scale_colour_manual(values = c('Probabilistic Wadeable\n Sites (2001 - 2018)' = 'grey21',
-                                 'Probabilistic Boatable\n Sites (2008 - 2018)' = 'red'),
+  scale_colour_manual(values = c('Probabilistic Wadeable\n Sites (2001 - 2020)' = 'grey21',
+                                 'Probabilistic Boatable\n Sites (2008 - 2020)' = 'red'),
                       guide = guide_legend(override.aes = list(linetype = c('blank','blank'),
                                                                shape = c(19, 19)))) +
   coord_sf(datum = NA) + # take away grid
@@ -256,7 +261,7 @@ ggplot() +
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ProbMon results indicate that DO conditions for the majority of Virginia’s streams and rivers are above the minimum DO criteria for specific water quality class designations (Table 2.4-1). Most stations with values below the appropriate criteria are located in coastal ecoregions where the DO is naturally lower due to swamp conditions. These sites with low DO need to be reviewed as candidates for site specific DO criteria. ProbMon results suggest that the majority of mountainous zone waters, stockable trout waters, and natural trout waters are meeting DO standards. Estimates are reflective of two sampling events from all perennial wadeable systems.
 
-##### Table 2.4-1. Dissolved oxygen results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2020'&Indicator=='DO')$NResp)`) of percentage of streams below Virginia’s Water Quality Standard ( +/- confidence limits).
+##### Table 2.4-1. Dissolved oxygen results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2022'&Indicator=='DO')$NResp)`) of percentage of streams below Virginia’s Water Quality Standard ( +/- confidence limits).
 ```{r table2.4-1}
 knitr::kable(DOsummary,align='c')
 ```
@@ -270,7 +275,7 @@ knitr::kable(DOsummary,align='c')
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ProbMon results show that `r format(filter(paramsummary,Parameter=='pH\n(Below 6)')$pct,digits=1,nsmall=1)`% of wadeable Virginia streams and rivers are estimated to have pH below 6 (Table 2.4-2). All stations with pH less than 6 occurred at sites located in the coastal ecoregion where swamp waters are common. DEQ collects additional parameters, including Acid Neutralizing Capacity (ANC) and sulfate data at ProbMon stations to estimate the percent of streams impacted by acid rain and acid mine drainage. High sulfate values in low pH streams are indicative of acid mine drainage whereas streams with low ANC values are susceptible to episodic acidification from acid rain runoff (USEPA 2000). However, based on ProbMon data collected during the `r IRyear` assessment period, DEQ found one occurrence of pH values below 6 in the mountain ecoregions. Estimates are reflective of an average of two data points, where data are available.
 
-##### Table 2.4-2.  pH results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2020'&Indicator=='pH')$NResp)`) of streams below or above Virginia’s Water Quality Standard ( +/- confidence limits).
+##### Table 2.4-2.  pH results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2022'&Indicator=='pH')$NResp)`) of streams below or above Virginia’s Water Quality Standard ( +/- confidence limits).
 ```{r table2.4-2}
 knitr::kable(pHsummary,align='c')
 ```
@@ -284,8 +289,10 @@ knitr::kable(pHsummary,align='c')
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Overall, DEQ estimates that temperature criteria exceedances will be rare in Virginia’s wadeable streams (Table 2.4-3) during the spring and fall. However, it is important to note that ProbMon temperature data is seldom collected during the most stressful hydrologic and weather conditions. Estimates are reflective of an average of two data points, where data are available. In order to properly estimate temperature conditions, temperature data must be collected continuously. Continuous temperature data collection began in 2016 at twenty probabilistic trend sites.
 
-##### Table 2.4-3. Temperature results (`r IRrange`, n= `r max(filter(dat,Subpopulation=='IR2020'&Indicator=='pH')$NResp)`) above Virginia’s Water Quality Standard ( +/- confidence limits).
+##### Table 2.4-3. Temperature results (`r IRrange`, n= `r max(filter(dat,Subpopulation=='IR2022'&Indicator=='pH')$NResp)`) above Virginia’s Water Quality Standard ( +/- confidence limits).
 ```{r table2.4-3}
+# this is verified in the raw data
+
 temp <- data.frame(c1='Temperature',c2='0.0% ( +/- 0.0% )')
 names(temp) <- c('Parameter','Above Standard (31/32 degrees Celsius)')
 knitr::kable(temp,align='c')
@@ -293,18 +300,33 @@ knitr::kable(temp,align='c')
 
 #### Dissolved Metals
 
+```{r metals criteria exceedances}
+# IR window Acute Exceedances
+acuteExceedances <- filter(metalsAssessment, Year >= 2015 & Year <= 2020 & Acute_Exceed==1) %>% 
+  distinct(siteID) %>% 
+  nrow()
+
+# IR Window Chronic Exceedances
+chronicExceedances <- filter(metalsAssessment, Year >= 2015 & Year <= 2020 & Chronic_Exceed==1)%>% 
+  distinct(siteID) %>% 
+  nrow()
+```
+
+
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Heavy metals have been identified as an important influence on benthic community structure in streams (Clements et al. 2000). Some taxa appear to be relatively tolerant to metals while other taxa are intolerant of heavy metals.  Metals are most biologically available and toxic when dissolved in water. Toxicity of many metals is dependent on water hardness making it necessary to calculate site specific water quality criteria from hardness values.  Table 2.4-4 lists the Virginia Water Quality Criteria for metals assuming a hardness (expressed as CaCO~3~) of 100 mg/L for most dissolved metals. The table also summarizes the number of sites that had detectable analytical results and the number of criterion exceedances based on site specific hardness values measured concurrently as part of the ProbMon program.
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;All criteria are calculated using site-specific hardness measures. One sample was measured above the respective chronic or acute sample criteria during the `r IRyear` Integrated Report sample window (`r IRrange`). Results are shown in Table 2.4-4.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;All criteria are calculated using site-specific hardness measures. `r capwords(readable(acuteExceedances))` `r ifelse(acuteExceedances > 1, "samples were", "sample was")` measured above the acute sample criteria while `r readable(chronicExceedances)` `r ifelse(chronicExceedances > 1, "samples were", "sample was")` measured above the acute sample criteria during the `r IRyear` Integrated Report sample window (`r IRrange`). Results are shown in Table 2.4-4.
 
-##### Table 2.4-4. Dissolved metals results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2020'&Indicator=='ARSENIC')$NResp)`) above Virginia’s Water Quality Standards ( +/- confidence limits). ppb^1^ = parts per billion.
+##### Table 2.4-4. Dissolved metals results (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2022'&Indicator=='ARSENIC')$NResp)`) above Virginia’s Water Quality Standards ( +/- confidence limits). ppb^1^ = parts per billion.
 ```{r table2.4-4}
+
+
 # copper mileage calculation, need to automate and not update ad hoc
-#copper <- filter(dat, Indicator == 'COPPER' & Subpopulation == 'Virginia') %>%
-#  select(Value, Estimate.P, StdError.P)
-# 1AQUA004.14 exceeds chronic & acute, measure = 5.26
-#100-vlookup(5.26, copper,2,TRUE) #Estimate
-#vlookup(4, copper, 3, TRUE) * 1.96 # MOE
+copper <- filter(dat, Indicator == 'COPPER' & Subpopulation == 'IR2022') %>%
+ select(Value, Estimate.P, StdError.P)
+#1AQUA004.14 exceeds chronic & acute, measure = 5.26
+copperEstimate <- 100-vlookup(5.26, copper,2,TRUE) #Estimate
+copperMoE <- vlookup(5.26, copper, 3, TRUE) * 1.96 # MOE
 
 x <- data.frame(c1=c('Arsenic','Cadmium','Chromium','Copper','Lead','Mercury','Nickel','Selenium','Silver','Zinc'),
                 c2=c('340','3.9 CaCO~3~=100','570  CaCO~3~=100','13   CaCO~3~=100',
@@ -312,8 +334,10 @@ x <- data.frame(c1=c('Arsenic','Cadmium','Chromium','Copper','Lead','Mercury','N
                      '3.4  CaCO~3~=100','120  CaCO~3~=100'),
                 c3=c('150','1.1 CaCO~3~=100','74 CaCO~3~=100','9 CaCO~3~=100','14 CaCO~3~=100',
                      '0.77','20 CaCO~3~=100','5','NA','120 CaCO~3~=100'),
-                c4=c(0,0,0,1,0,0,0,0,0,0), 
-                c5=c('0% (+/- 0%)','0% (+/- 0%)', '0% (+/- 0%)','0.1% (+/- 0.2%)',
+                c4=c(0,0,0,acuteExceedances,0,0,0,0,0,0), 
+                c5=c('0% (+/- 0%)','0% (+/- 0%)', '0% (+/- 0%)',
+                     paste0(signif(copperEstimate, digits = 2),'% (+/- ',signif(copperMoE, digits = 2),"%)") , 
+                     # previously was more manual '0.1% (+/- 0.2%)',
                      '0% (+/- 0%)','0% (+/- 0%)', '0% (+/- 0%)','0% (+/- 0%)',
                      '0% (+/- 0%)','0% (+/- 0%)'))
 names(x) <- c('Metal','DEQ Acute Criteria (ppb^1^)','DEQ Chronic Criteria (ppb^1^)','# Above Criteria','% of Miles Above Criteria')
@@ -347,7 +371,7 @@ knitr::kable(x,align='c')
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEQ uses multimetric macroinvertebrate indices, specifically the Virginia Stream Condition Index (VSCI) and the Virginia Coastal Plain Macroinvertebrate Index (VCPMI), to assess the aquatic life use status of wadeable streams and rivers. The VSCI and the VCPMI are applied to biomonitoring data collected in freshwater non-coastal areas and freshwater coastal areas, respectively. These indices include several biological metrics that are regionally calibrated to the appropriate reference condition (DEQa 2006; DEQ 2013). Results are calculated into a single value, or score, that is sensitive to a wide range of stressors.
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VSCI and VCPMI scores were scaled for comparability so they could be compared in all analyses (Table 2.4-5). Based on VSCI and VCPMI ProbMon results, VADEQ estimates that `r format(vlookup(60,VSCI,2,T),digits=1,nsmall=1)`% of Virginia streams and rivers do not meet the aquatic life use standard (Table 2.4-6, DEQ 2018). An estimate of statewide biological health by condition category is shown in Figure 2.4-7. VSCI scores less than 42 are considered severely ecologically stressed, scores between 42 and 60 are moderately stressed, while sites above 60 to 72 are thought to have good ecological condition and sites with VSCI scores above 72 are considered to have excellent water quality and habitat conditions  (DEQ, 2006a). It is important to remember that biological indicators represent long-term water quality conditions and respond to a variety of stressors. 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VSCI and VCPMI scores were scaled for comparability so they could be utilized in all analyses (Table 2.4-5). Based on VSCI and VCPMI ProbMon results, VADEQ estimates that `r format(vlookup(60,VSCI,2,T),digits=1,nsmall=1)`% of Virginia streams and rivers do not meet the aquatic life use standard (Table 2.4-6, DEQ 2018). An estimate of statewide biological health by condition category is shown in Figure 2.4-7. VSCI scores less than 42 are considered severely ecologically stressed, scores between 42 and 60 are moderately stressed, while sites above 60 to 72 are thought to have good ecological condition and sites with VSCI scores above 72 are considered to have excellent water quality and habitat conditions  (DEQ, 2006a). It is important to remember that biological indicators represent long-term water quality conditions and respond to a variety of stressors. 
 
 ##### Table 2.4-5. Thresholds of condition classes for biological indicators.
 ```{r table2.4-5}
@@ -356,7 +380,7 @@ names(bioindicators) <- c('Response Parameters','Optimal','Suboptimal','Classifi
 knitr::kable(bioindicators,align='c')
 ```
 
-##### Table 2.4-6. VSCI/CPMI (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2020'&Indicator=='VSCIVCPMI')$NResp)`) Scores below Virginia’s Assessment Thresholds ( +/- confidence limits).
+##### Table 2.4-6. VSCI/CPMI (`r IRrange`, n=`r max(filter(dat,Subpopulation=='IR2022'&Indicator=='VSCIVCPMI')$NResp)`) Scores below Virginia’s Assessment Thresholds ( +/- confidence limits).
 ```{r table2.4-6}
 VSCIsummary <- data.frame(Parameter='VSCI/VCPMI',pct=vlookup(60,VSCI,2,TRUE),
                           MoE= vlookup(60,VSCI,3,TRUE) * 1.96) %>%
@@ -370,7 +394,7 @@ knitr::kable(VSCIsummary,align='c')
 ```
 
 
-##### Figure 2.4-7. Biological stream condition index based on VSCI/VCPMI Scores (`r IRrange`, n = `r  max(filter(dat,Subpopulation=='IR2020'&Indicator=='VSCIVCPMI')$NResp)`).
+##### Figure 2.4-7. Biological stream condition index based on VSCI/VCPMI Scores (`r IRrange`, n = `r  max(filter(dat,Subpopulation=='IR2022'&Indicator=='VSCIVCPMI')$NResp)`).
 ```{r,fig.width=3.5, fig.height=2.75}
 VSCIcut <- data.frame(Stress=c('Severe Stress','Moderate Stress', 
                                'Good Condition','Excellent Condition'),
@@ -569,11 +593,14 @@ basintrend <- data.frame(basin=c('Chowan','Rappahannock','York','Potomac','Shena
                                 vlookup(60,new,3,TRUE),vlookup(60,bigsandy,3,TRUE),vlookup(60,cp,3,TRUE),
                                 vlookup(60,holston,3,TRUE)),
                          plotloc=30)
+
+basinOver50Pct <- filter(basintrend, VSCIpct >=50) %>% 
+  arrange(desc(VSCIpct))
 ```
 
 ##### Biological Condition by Major River Basins
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Figure 2.4-10 illustrates the differences in biological condition across Virginia's major river basins as the estimated percent of river miles below the biologic assessment threshold. Three of eleven major river basins in Virginia have well over 50% of stream miles under moderate to severe biological stress, including the Big Sandy River basin, Chowan River basin, and Rappahannock River basin. Most of the major river basins have between 25 to 50% of stream miles below the biological standard. The Holston River basin has the fewest stream miles with moderate to severe biological stress at only `r format(filter(basintrend,basin=='Holston')$VSCIpct,digits=2,nsmall=1)`%.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Figure 2.4-10 illustrates the differences in biological condition across Virginia's major river basins as the estimated percent of river miles below the biologic assessment threshold. `r capwords(readable(nrow(basinOver50Pct)))` of `r readable(nrow(basintrend))` major river basins in Virginia have well over 50% of stream miles under moderate to severe biological stress, including the `r basinOver50Pct$basin[1]` River basin, `r basinOver50Pct$basin[2]` River basin, and `r basinOver50Pct$basin[3]` River basin. Most of the major river basins have between 25 to 50% of stream miles below the biological standard. The Holston River basin has the fewest stream miles with moderate to severe biological stress at only `r format(filter(basintrend,basin=='Holston')$VSCIpct,digits=2,nsmall=1)`%.
 
 ##### Figure 2.4-10 VSCI status by major Virginia basins. The estimated percent of stream miles below the VSCI/VCPMI assessment threshold is listed on the y axis. The number of samples collected from 2001 - `r IRyearWindowEnd` in each basin is identified as n.
 ```{r fig2.4-10,fig.width=6,fig.height=5}
@@ -603,18 +630,7 @@ ggplot(basintrend,aes(basin,VSCIpct))+geom_bar(stat='identity', fill="steelblue"
   geom_errorbar(aes(ymax=VSCIpct + MoE,ymin=VSCIpct - MoE), position="dodge", width=0.15)
 
 ```
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Micromaps are employed in this chapter to visualize this spatially distributed dataset. Micromaps illustrate statistics while highlighting the geographic regions from which they are derived. Figure 2.4-11 offers a simplistic micromap, identifying VSCI/VCPMI by basin for explanatory purposes. By using a micromap and plotting the median VSCI/VCPMI and interquartile range, we can visualize the range of biological condition in each major basin as well as compare these statistics among basins. VSCI and VCPMI scores were converted to a single biological scale for comparability in all analyses. Unconverted VCPMI scores are compared to a threshold score of 40; however, for the converted scores shown in 2.4-11 and subsequent micromaps, 60 is the biological threshold for both the VSCI and VCPMI scores.
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;To understand Figure 2.4-11, begin at the top panel where the Holston, James, and New basins are highlighted. Moving from left to right, the n column specifies how many samples were collected in each basin. The number of samples per basin is consistent across all micromaps presented in this chapter. The dotplot identifies the median VSCI/VCPMI score in each basin with a solitary dot and the interquartile range, a measure of variability in the dataset between the 25th and 75th percentile, illustrated by a horizontal line spanning these percentiles. The dashed vertical line at 60 highlights the threshold for biological impairment. On the far right, a map illustrates which basins are described statistically in that panel with colors corresponding to the dot left of the basin name. Basins are grayed out in lower maps to indicate they are highlighted in a map above. Because the basins are ordered by median VSCI/VCPMI scores, basins at the top of the micromap have the best biological condition and basins at the bottom have the worst. The micromap illustrates the Chowan, Big Sandy, and Rappahannock generally have the lowest median VSCI/VCPMI scores in the state. 
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The bottom-most panel highlights the differences in the populations of river basins with the lowest scoring median VSCI/VCMPI, the Big Sandy River and Rappahannock River basins. The proximity of the 50th and 75th percentiles in the Big Sandy River basin, both below 55 on the combined VSCI/VCPMI biological scale, indicate the tendency of the population to fall well below the biological assessment threshold. The median VSCI/VCPMI score of the Rappahannock River basin falls below the Big Sandy River basin median, but the sample population collected from the Rappahannock River basin incorporates a wider range of VSCI/VCPMI scores. Although the Rappahannock River basin median falls last compared to basins statewide, the basin contains some higher scoring sites more in line with the rest of the basins statewide, whereas the Big Sandy River basin consistently exhibits scores below the biological assessment threshold. Continued sampling will likely further differentiate the biological condition of these two basins.
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Another interesting takeaway is the differences in the river basins that make up the Tennessee River basin drainage. The Holston and Clinch-Powell River basins plots at opposite ends of the biological condition scale in comparison to the Big Sandy River basin. The 25th percentiles of both the Holston and Clinch-Powell River basins plot at least 5 points above the 75th percentile of the Big Sandy River basin, indicating VSCI/VCPMI scores from the best sites in the Big Sandy River basin would be considered among the worst in the directly adjacent Holston and Clinch-Powell drainages.  
-
-##### Figure 2.4-11. VSCI/VCPMI status by basin. The vertical dashed line at 60 highlights the biologic assessment threshold. Data encompasses samples collected from 2001 - `r IRyearWindowEnd`.
-
-```{r fig2.4-11,fig.width=9,fig.height=9}
+```{r micromap data prep}
 map.table <- create_map_table(basinssmooth_sp,'BASIN')
 # pull median VSCI scores and upper/lower bounds for micromap
 stats <- data.frame(Basin=c('Chowan','Rappahannock','York','Potomac','Shenandoah','Roanoke','James','New',
@@ -671,8 +687,18 @@ basin_rank <- statslookup('VSCIVCPMI',60,'SubOptimal',FALSE) %>%
   arrange(desc(VSCIVCPMIEstimate.P)) %>% 
   mutate(Order = row_number(), Indicator = 'VSCI/VCPMI', Basin = Subpopulation) %>%
   dplyr::select(Basin, Indicator, Order)
+```
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Micromaps are employed in this chapter to visualize this spatially distributed dataset. Micromaps illustrate statistics while highlighting the geographic regions from which they are derived. Figure 2.4-11 offers a simplistic micromap, identifying VSCI/VCPMI by basin for explanatory purposes. By using a micromap and plotting the median VSCI/VCPMI and interquartile range, we can visualize the range of biological condition in each major basin as well as compare these statistics among basins. VSCI and VCPMI scores were converted to a single biological scale for comparability in all analyses. Unconverted VCPMI scores are compared to a threshold score of 40; however, for the converted scores shown in 2.4-11 and subsequent micromaps, 60 is the biological threshold for both the VSCI and VCPMI scores.
 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;To understand Figure 2.4-11, begin at the top panel where the Holston, James, and New basins are highlighted. Moving from left to right, the n column specifies how many samples were collected in each basin. The number of samples per basin is consistent across all micromaps presented in this chapter. The dotplot identifies the median VSCI/VCPMI score in each basin with a solitary dot and the interquartile range, a measure of variability in the dataset between the 25th and 75th percentile, illustrated by a horizontal line spanning these percentiles. The dashed vertical line at 60 highlights the threshold for biological impairment. On the far right, a map illustrates which basins are described statistically in that panel with colors corresponding to the dot left of the basin name. Basins are grayed out in lower maps to indicate they are highlighted in a map above. Because the basins are ordered by median VSCI/VCPMI scores, basins at the top of the micromap have the best biological condition and basins at the bottom have the worst. The micromap illustrates the Chowan, Big Sandy, and Rappahannock generally have the lowest median VSCI/VCPMI scores in the state. 
 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The bottom-most panel highlights the differences in the populations of river basins with the lowest scoring median VSCI/VCMPI, the Big Sandy River and Rappahannock River basins. The proximity of the 50th and 75th percentiles in the Big Sandy River basin, both below 60 on the combined VSCI/VCPMI biological scale, indicate the tendency of the population to fall well below the biological assessment threshold. The median VSCI/VCPMI score of the Rappahannock River basin falls below the Big Sandy River basin median, but the sample population collected from the Rappahannock River basin incorporates a wider range of VSCI/VCPMI scores. Although the Rappahannock River basin median falls last compared to basins statewide, the basin contains some higher scoring sites more in line with the rest of the basins statewide, whereas the Big Sandy River basin consistently exhibits scores below the biological assessment threshold. Continued sampling will likely further differentiate the biological condition of these two basins.
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Another interesting takeaway is the differences in the river basins that make up the Tennessee River basin drainage. The Holston and Clinch-Powell River basins plots at opposite ends of the biological condition scale in comparison to the Big Sandy River basin. The 25th percentiles of both the Holston and Clinch-Powell River basins plot at least 5 points above the 75th percentile of the Big Sandy River basin, indicating VSCI/VCPMI scores from the best sites in the Big Sandy River basin would be considered among the worst in the directly adjacent Holston and Clinch-Powell drainages.  
+
+##### Figure 2.4-11. VSCI/VCPMI status by basin. The vertical dashed line at 60 highlights the biologic assessment threshold. Data encompasses samples collected from 2001 - `r IRyearWindowEnd`.
+
+```{r fig2.4-11,fig.width=9,fig.height=9}
 suppressWarnings(
   mmplot(stat.data=stats,
        map.data=map.table,
@@ -758,9 +784,9 @@ basin_rank <- suppressWarnings(
 ```
 
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Habitat is defined as the area or environment where an organism resides. It encompasses its surroundings, both living and non-living. Fish, aquatic insects, and plants require certain types of habitat to thrive, so in-stream and riparian (stream bank) habitat is evaluated when a biomonitoring sample is collected. Because different organisms have diverse habitat requirements, a variety of available habitat types in a stream or river will support a diverse aquatic community. Habitat is scored by a rapid qualitative evaluation of ten habitat parameters summed together (total scores range from 0 to 200). Habitat scores above 150 indicate habitat conditions favorable for supporting a healthy aquatic community and are considered optimal. Scores lower than 120 are considered suboptimal and scores between 120 and 150 are fair (EPA 1999). Habitat disturbance is frequently identified in benthic TMDL stressor analyses as a potential or probable stressor. As indicated in Figure 2.4-12, DEQ estimates that slightly under `r format(100-vlookup(150,hab,2,TRUE),digits=2,nsmall=0)`% of stream and river miles have available habitat that is considered optimal.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Habitat is defined as the area or environment where an organism resides. It encompasses its surroundings, both living and non-living. Fish, aquatic insects, and plants require certain types of habitat to thrive, so in-stream and riparian (stream bank) habitat is evaluated when a biomonitoring sample is collected. Because different organisms have diverse habitat requirements, a variety of available habitat types in a stream or river will support a diverse aquatic community. Habitat is scored by a rapid qualitative evaluation of ten habitat parameters summed together (total scores range from 0 to 200). Habitat scores above 150 indicate habitat conditions favorable for supporting a healthy aquatic community and are considered optimal. Scores lower than 120 are considered suboptimal and scores between 120 and 150 are fair (EPA 1999). Habitat disturbance is frequently identified in benthic TMDL stressor analyses as a potential or probable stressor. As indicated in Figure 2.4-12, DEQ estimates that slightly over `r format(100-vlookup(150,hab,2,TRUE),digits=2,nsmall=0)`% of stream and river miles have available habitat that is considered optimal.
 
-##### Figure 2.4-12. Estimate of habitat condition in Virginia streams and rivers and associated 95% confidence interval. Data presented is from `r IRrange` (n = `r  max(filter(dat,Subpopulation=='IR2020'&Indicator=='TotHab')$NResp)`).
+##### Figure 2.4-12. Estimate of habitat condition in Virginia streams and rivers and associated 95% confidence interval. Data presented is from `r IRrange` (n = `r  max(filter(dat,Subpopulation=='IR2022'&Indicator=='TotHab')$NResp)`).
 ```{r fig2.4-12, fig.width=3, fig.height=2.25}
 ggplot(totalshab,aes(Condition,pct,fill=Condition))+
   geom_bar(stat='identity',width=.5)+
@@ -780,7 +806,7 @@ ggplot(totalshab,aes(Condition,pct,fill=Condition))+
     axis.line = element_line(colour = "black")) # no background grid
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Figure 2.4-13 is a micromap depicting the prevalence and scale of habitat disturbance across major basins statewide. The left barplot highlights the estimated percent of stream miles with suboptimal habitat scores, ordered from highest to lowest, with the corresponding statewide estimate of stream miles with suboptimal habitat scores (`r format(filter(TotHabstats,Subpopulation=='Virginia')$TotHabEstimate.P,digits=2,nsmall=1)`% for 2001 - `r IRyearWindowEnd`) illustrated with a vertical dashed line. The right barplot shows the percent of stream miles below the biological assessment threshold for each basin, again with the Virginia estimate of stream miles below the biological impairment threshold represented by a dashed vertical line (`r format(filter(VSCIstats,Subpopulation=='Virginia')$VSCIVCPMIEstimate.P,digits=2,nsmall=1)`% for 2001 - `r IRyearWindowEnd`). No distinct spatial clustering appears when analyzing habitat disturbance with micromaps, indicating habitat degradation is a widespread problem across Virginia and is not limited to particular river basins or areas in the state. Ranking major river basins by decreasing estimates of habitat alteration, the Rappahannock, Clinch-Powell, Chowan, New, and Roanoke River basins have suboptimal habitat condition above the statewide estimate[^5].
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Figure 2.4-13 is a micromap depicting the prevalence and scale of habitat disturbance across major basins statewide. The left barplot highlights the estimated percent of stream miles with suboptimal habitat scores, ordered from highest to lowest, with the corresponding statewide estimate of stream miles with suboptimal habitat scores (`r format(filter(TotHabstats,Subpopulation=='Virginia')$TotHabEstimate.P,digits=2,nsmall=1)`% for 2001 - `r IRyearWindowEnd`) illustrated with a vertical dashed line. The right barplot shows the percent of stream miles below the biological assessment threshold for each basin, again with the Virginia estimate of stream miles below the biological impairment threshold represented by a dashed vertical line (`r format(filter(VSCIstats,Subpopulation=='Virginia')$VSCIVCPMIEstimate.P,digits=2,nsmall=1)`% for 2001 - `r IRyearWindowEnd`). No distinct spatial clustering appears when analyzing habitat disturbance with micromaps, indicating habitat degradation is a widespread problem across Virginia and is not limited to particular river basins or areas in the state. Ranking major river basins by decreasing estimates of habitat alteration, the Rappahannock, Clinch-Powell, Chowan, Potomac, New, and Roanoke River basins have suboptimal habitat condition above the statewide estimate[^5].
 
 ##### Figure 2.4-13. Percent of stream miles with suboptimal habitat disturbance. From left to right, the vertical dashed lines represent the percent of stream miles across Virginia with suboptimal habitat disturbance and biologic condition below the assessment threshold, respectively. Data presented is from 2001 - `r IRyearWindowEnd`.
 
@@ -856,7 +882,7 @@ basin_rank <- bind_rows(basin_rank,
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DEQ uses the relative bed stability (RBS) method for predicting the expected substrate size distribution for streams (Kaufmann 1999). RBS incorporates stream channel shape, slope, flow, and sediment supply. The method calculates a ‘stream power’ based on channel measurements to predict the expected sediment size distribution. The ratio of the observed sediment to the expected sediment is a measure of the RBS. A stream with a log RBS of less than -1 is carrying excess sediment (suboptimal), streams between -0.5 and 0.5 have a normal sediment load (optimal), and streams above 0.5 are excessively hardened (fair) (Kaufmann 1999 and USEPA 2000). Relative bed stability is frequently identified in benthic TMDL stressor analyses as a potential or probable stressor. Over `r format(vlookup(-1,LRBS,2,TRUE),digits=2,nsmall=0)`% of Virginia’s stream and river miles have suboptimal sedimentation values (Figure 2.4-14).
 
-##### Figure 2.4-14. Estimate of streambed sedimentation conditions in Virginia streams and rivers as defined by LRBS measures and 95% confidence interval. Data presented is from `r IRrange` (n = `r  max(filter(dat,Subpopulation=='IR2020'&Indicator=='LRBS')$NResp)`).
+##### Figure 2.4-14. Estimate of streambed sedimentation conditions in Virginia streams and rivers as defined by LRBS measures and 95% confidence interval. Data presented is from `r IRrange` (n = `r  max(filter(dat,Subpopulation=='IR2022'&Indicator=='LRBS')$NResp)`).
 ```{r fig2.4-14,fig.width=3, fig.height=2.25}
 ggplot(totalsLRBS,aes(Condition,pct,fill=Condition))+
   geom_bar(stat='identity',width=.5)+
@@ -1487,7 +1513,7 @@ ggplot(togetherstackedflip,aes(Parameter,pct,fill=Condition,label=pct))+
  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Biological monitoring results indicate that close to half of Virginia’s streams and rivers are estimated to have a score below the established biological assessment thresholds Benthic macroinvertebrate communities are estimated to be degraded in `r format(filter(paramsummary, Parameter=='VSCI/VCPMI\n(Biomonitoring)')$pct,digits=3)`% of the wadeable streams and rivers in Virginia. Benthic macroinvertebrate communities are indicators of water quality problems because they represent the health of the aquatic life communities in Virginia waters. To further explore the relationships between the benthic macroinvertebrate communities and potential stressors across Virginia, the following six stressors would be expected to increase the risk to aquatic organisms: streambed sedimentation, habitat disturbance, total phosphorus, total nitrogen, total dissolved solids, and cumulative metals in water column. These parameters are discussed in Section 2.4.5. Although these six stressors do not currently have numeric water quality criteria, most are being addressed through a variety of strategies such as benthic TMDLs and TMDL implementation plans, nutrient management plans and best management practices. As the ProbMon program evolves and DEQ expands on the uses of ProbMon data, enhancement of the strategies for understanding, evaluating and restoring the Commonwealth’s streams and rivers will continue.
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The 2020 Integrated Report offers the first comparison of  ProbMon data among major river basins throughout the Commonwealth, based on a `r as.numeric(IRyearWindowEnd) - 2001 + 1`-year data set from 2001 to 2016. Over that time period, the Holston, James, and Clinch-Powell River basins are estimated to have the least number of river miles falling into the suboptimal category for biological integrity, while the Big Sandy, Chowan, Rappahannock and Shenandoah River basins are estimated to have the most number of river miles falling into the suboptimal category for biological integrity. While the Big Sandy and Shenandoah River basins showed the highest estimates of suboptimal river miles statewide for a single stressor (ionic strength and total nitrogen, respectively), the Chowan and Rappahannock River basins have the highest statewide estimates for suboptimal river miles among multiple stressors, including habitat disturbance, streambed sedimentation, total phosphorus, total nitrogen, and cumulative dissolved metals. In addition to presentations, posters, reports, and handouts about ProbMon, raw data and analytical procedures used to generate this report in open source code are available for viewing and download at the following website: http://www.deq.virginia.gov/Programs/Water/WaterQualityInformationTMDLs/WaterQualityMonitoring/ProbabilisticMonitoring.aspx .
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The 2020 Integrated Report offered the first comparison of ProbMon data among major river basins throughout the Commonwealth, based on a `r as.numeric(IRyearWindowEnd) - 2001 + 1`-year data set from 2001 to 2016. Over that time period, the Holston, James, and Clinch-Powell River basins are estimated to have the least number of river miles falling into the suboptimal category for biological integrity, while the Big Sandy, Chowan, Rappahannock and Shenandoah River basins are estimated to have the most number of river miles falling into the suboptimal category for biological integrity. While the Big Sandy and Shenandoah River basins showed the highest estimates of suboptimal river miles statewide for a single stressor (ionic strength and total nitrogen, respectively), the Chowan and Rappahannock River basins have the highest statewide estimates for suboptimal river miles among multiple stressors, including habitat disturbance, streambed sedimentation, total phosphorus, total nitrogen, and cumulative dissolved metals. In addition to presentations, posters, reports, and handouts about ProbMon, raw data and analytical procedures used to generate this report in open source code are available for viewing and download at the following website: http://www.deq.virginia.gov/Programs/Water/WaterQualityInformationTMDLs/WaterQualityMonitoring/ProbabilisticMonitoring.aspx .
 
 ```{r}
 # force page break
