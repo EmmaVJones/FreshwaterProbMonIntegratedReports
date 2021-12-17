@@ -73,6 +73,7 @@ listOfResults <- function(popstatus.est, finalData, parameterName){
     estimateRU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RU','Roanoke River, Upper', specialWeight=FALSE),
     estimateJM = subpopEstimate(finalData,parameterName, 'VAHUSB', 'JM','James River, Middle (Piedmont)', specialWeight=FALSE),
     estimateNE = subpopEstimate(finalData,parameterName, 'VAHUSB', 'NE','New River', specialWeight=FALSE),
+    estimateJU = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RU','Roanoke River, Upper', specialWeight=FALSE),
     estimateRD = subpopEstimate(finalData,parameterName, 'VAHUSB', 'RD','Roanoke River- Dan River', specialWeight=FALSE),
     estimateYO = subpopEstimate(finalData,parameterName, 'VAHUSB', 'YO','York River', specialWeight=FALSE),
     estimatePL = subpopEstimate(finalData,parameterName, 'VAHUSB', 'PL','Potomac River, Lower', specialWeight=FALSE),
