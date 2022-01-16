@@ -1348,6 +1348,11 @@ suppressWarnings(
 brks <- 1:11
 clrs <- c("#023FA5", "#5465AB", "#7D87B9", "#A1A6C8", "#BEC1D4", "#D6D7DD", "#E2E2E2","#F1F1F1",'#F1F1F1' ,'#F1F1F1' ,'#F1F1F1','#F1F1F1' )
 
+# identify the "least" and "most" disturbed basins by rank, all in air quotes
+basin_rankScore <- basin_rank %>% 
+  group_by(Basin) %>% 
+  summarise(sumOrder = sum(Order)) %>% 
+  arrange(desc(sumOrder))
 
 
 rankBasins2 <- pivot_wider(basin_rank, names_from = Basin, values_from = Order) %>%
