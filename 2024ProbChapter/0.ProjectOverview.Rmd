@@ -1,0 +1,50 @@
+---
+title: "Project Overview"
+author: "Emma Jones"
+date: "2/6/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Background
+
+This document walks you through the steps required to produce the IR 2024 Freshwater Probabilistic Monitoring chapter. Separate "modules" detail data acquisition and cleaning, watershed delineation, data smashing, calculating design weights, running analyses, and writing the Integrated Report chapter due to EPA every two years. The report covers data collected by the program from 2017-2022. 
+
+## Major Updates
+
+This cycle represents the first time R is used for the entire process of data querying through report publication. All data acquisition steps are codified for more reproducible reporting thanks to direct access to the ODS environment from R.
+
+## R Version
+
+Though R 4.2.2 is the latest supported version of R on CRAN, this report is produced using R 3.6.2. All package versions used in the production of this report are listed in each relevant script to ensure reproducibility.
+
+
+### Data Acquisition
+
+For 2024, the 1.dataAcquisition.Rmd script walks users through the necessary steps to query data from the ODS environment, clean it, summarize it, and manipulate it into a format used by later reporting modules. 
+
+The major outputs from this script is the designStatusIR2024.csv and Wadeable_ProbMon_2001-2022.csv in the /processedData/ directory.
+
+### Data Analysis
+
+The 2.dataAnalysis.Rmd script walks users through the necessary steps to analyze the above data to generate CDF and relative risk estimates.
+
+This analysis is run in R 3.6.1 to ensure consistency with last cycle's spsurvey version.
+
+### Automated Report
+
+The 3.2024ProbChapter.Rmd contains all scripts necessary for auto generating the ProbChapter for the IR report. 
+
+
+### Other
+
+Where does the data go?
+
+After the population estimates are updated, the data are used in a number of programs. It is the analyst's responsibility to update these projects with new population estimates when the data are available.
+
+ - WQM CEDS data query tool: sourced to generate CDF curves for single station query
+ - Benthic Stressor Analysis tool: sourced to provide best population data for comparison to input data
+ - Prob Exploratory Data Analysis tool: sourced to explore data rapidly and answer questions as well as generate micromaps on the fly
