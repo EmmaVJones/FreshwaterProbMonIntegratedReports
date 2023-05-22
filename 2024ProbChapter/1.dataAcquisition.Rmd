@@ -73,8 +73,9 @@ Generally speaking, we need to hit a few data sources to acquire all the data we
 Now we need to bring in the two years worth of new sites to pull the data
 
 ```{r new sites}
-WQM_Stations_Filter <- read_excel('originalData/Wadeable_ProbMon2021-2022.xlsx', 
-                                  sheet = '20212022') %>% 
+WQM_Stations_Filter <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virginia/Freshwater ProbMon/IR2024/Wadeable_ProbMon2021-2022.xlsx',
+                                  #'originalData/Wadeable_ProbMon2021-2022.xlsx', # or from here for local archiving
+                                  sheet = 'Sheet1') %>% 
   filter(status == 'TS') # keep only wadeable sites that were sampled for data querying
 ```
 
@@ -170,30 +171,67 @@ conventionalsList <- conventionalsSummary(conventionals= pin_get("conventionals2
 conventionals <- conventionalsList$More %>% 
   arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
 
-#write.csv(conventionals, 'processedData/2022conventionals.csv', row.names = F, na = "")
-```
-### QA data with Lucy
-
-In order to make sure we are pulling the same information from Logi and R-ODS connection, the following script walks users through verification. Lucy pulled 2020 data using Logi.
-
-```{r convetionals QA}
-source('conventionalsQA.R')
+#write.csv(conventionals, 'processedData/2024conventionals.csv', row.names = F, na = "")
 ```
 
-Looks good for parameters matching what logi pulls. 
+### QA data
+
+In previous cycles, we had a Logi-proficient staff member pull the pre-R queries for the same data using Logi and then ran analyses to double check both methods resulted in the same answers. For IR2024, we will subsample 5% of all CEDS field and analyte data points and manually review to ensure the data are correct. 
+
+```{r QA data}
+conventionalsLong <- conventionals %>% 
+  dplyr::select(-c(STA_DESC:Data_Source, FDT_DEPTH_DESC:FDT_COMMENT, Ana_Sam_Mrs_Container_Id_Desc, ENTEROCOCCI )) %>% 
+  dplyr::select(! contains(c('LEVEL_', 'RMK'))) %>% # drop all level columns since all DEQ data
+  pivot_longer(-c('FDT_STA_ID', 'FDT_DATE_TIME', 'FDT_DEPTH'), 
+               names_to = 'Parameter', values_to = 'Value',  values_drop_na = TRUE)  # drop NA values so QAing 10% of real data
+
+# how many rows do we need to QA?
+nrow(conventionalsLong) * .05
+  
+conventionalsLongQA <- conventionalsLong %>% 
+  sample_n(331, replace = FALSE) %>%  #randomly selects 335 rows for QA
+  arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
+
+#331 is still a lot, subsample again to 5% and see if we need to dig in more
+conventionalsLongQAminiEmma <- conventionalsLongQA %>% 
+  sample_n(17, replace = FALSE) %>%  #randomly selects 5% of rows for QA
+  arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
+# write.csv(conventionalsLongQAminiEmma, 'processedData/QA/conventionalsLongQAminiEmma.csv')
+# This dataset checked out 100%
+
+
+conventionalsLongQAminiJason <- conventionalsLongQA %>% 
+  sample_n(17, replace = FALSE) %>%  #randomly selects 5% of rows for QA
+  arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
+# write.csv(conventionalsLongQAminiJason, 'processedData/QA/conventionalsLongQAminiJason.csv')
+
+
+conventionalsLongQAminiScott <- conventionalsLongQA %>% 
+  sample_n(17, replace = FALSE) %>%  #randomly selects 5% of rows for QA
+  arrange(FDT_STA_ID, FDT_DATE_TIME, FDT_DEPTH)
+# write.csv(conventionalsLongQAminiScott, 'processedData/QA/conventionalsLongQAminiScott.csv')
+rm(conventionalsLongQA, conventionalsLongQAmini, conventionalsLongQAminiEmma, conventionalsLongQAminiJason, conventionalsLongQAminiScott) # clean up workspace
+```
+
+
+
+#### QA Equipment Blank Data
+
 
 Now quick QA test for EB information. What we want is to make sure that none of the blanks have too high values, indicating too much uncertainty with respect to units and potentially exceeding standards.
 
 ```{r QA conventionals EB}
 QAconventionals <- conventionals %>% 
   filter(Ana_Sam_Mrs_Container_Id_Desc == 'EB') %>% 
-  dplyr::select(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc, NITROGEN_mg_L:RMK_82079) %>% 
+  dplyr::select(FDT_STA_ID, FDT_DATE_TIME,STA_REC_CODE, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc, NITROGEN_mg_L:RMK_82079) %>% 
   dplyr::select(!contains('LEVEL_'))
+
+# No SWRO QA in 2021-2022?
 
 # make a lookuptable quick
 allNames = c(names(QAconventionals %>% dplyr::select(-c(FDT_STA_ID:Ana_Sam_Mrs_Container_Id_Desc))))
-parameters = x[seq(1, length(x), 2)]  
-remarks = x[! x %in% y]  
+parameters = allNames[seq(1, length(allNames), 2)]  
+remarks = allNames[! allNames %in% parameters]  
 
 lookupTable <- tibble(Parameter = parameters,
        RemarkName = remarks) %>% 
@@ -202,62 +240,47 @@ lookupTable <- tibble(Parameter = parameters,
 # two steps bc can't combine character and numeric entries in a pivot longer
 QAconventionals <- left_join(
   QAconventionals %>% 
-    dplyr::select(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc, ! contains('RMK')) %>% 
+    dplyr::select(FDT_STA_ID, FDT_DATE_TIME, STA_REC_CODE,FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc, ! contains('RMK')) %>% 
     #group_by(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc) %>% 
-    pivot_longer(cols = -c(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc),
+    pivot_longer(cols = -c(FDT_STA_ID, FDT_DATE_TIME, STA_REC_CODE, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc),
                  names_to = 'Parameter', values_to = 'Measure', values_drop_na = T) %>% 
     left_join(dplyr::select(lookupTable, -RemarkName), by = 'Parameter'),
   QAconventionals %>% 
-    dplyr::select(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc,  contains('RMK')) %>% 
+    dplyr::select(FDT_STA_ID, FDT_DATE_TIME, STA_REC_CODE, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc,  contains('RMK')) %>% 
     #group_by(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc) %>% 
-    pivot_longer(cols = -c(FDT_STA_ID, FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc),
+    pivot_longer(cols = -c(FDT_STA_ID, FDT_DATE_TIME, STA_REC_CODE, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc),
                  names_to = 'RemarkName', values_to = 'Remark', values_drop_na = T) %>% 
     left_join(dplyr::select(lookupTable, -Parameter), by = 'RemarkName'),
-  by = c("FDT_STA_ID", "FDT_DATE_TIME", "FDT_SPG_CODE", "Ana_Sam_Mrs_Container_Id_Desc", "link")) %>% 
+  by = c("FDT_STA_ID", "FDT_DATE_TIME", "STA_REC_CODE", "FDT_SPG_CODE", "Ana_Sam_Mrs_Container_Id_Desc", "link")) %>% 
   dplyr::select(-link)
   
-QAconventionalsChar <-  conventionals %>% 
-
-group_by(FDT_STA_ID, FDT_DATE_TIME) %>% 
-  mutate(n = n()) %>% 
-  filter(n > 1) %>% 
-  dplyr::select(n,FDT_STA_ID,	FDT_DATE_TIME,	FDT_DEPTH,	FDT_SPG_CODE,	Ana_Sam_Mrs_Container_Id_Desc:RMK_82079, everything()) %>% 
-  arrange(FDT_STA_ID,	FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc)
-
-# QAconventionals <- conventionals %>% 
-#   group_by(FDT_STA_ID, FDT_DATE_TIME) %>% 
-#   mutate(n = n()) %>% 
-#   filter(n > 1) %>% 
-#   dplyr::select(n,FDT_STA_ID,	FDT_DATE_TIME,	FDT_DEPTH,	FDT_SPG_CODE,	Ana_Sam_Mrs_Container_Id_Desc:RMK_82079, everything()) %>% 
-#   arrange(FDT_STA_ID,	FDT_DATE_TIME, FDT_SPG_CODE, Ana_Sam_Mrs_Container_Id_Desc)
 
 #write.csv(QAconventionals, 'test.csv', row.names = F, na="")
 ```
 
+
 T	= Value reported is less than the criteria of detection
 QQ =	Analyte detected above the MDL but below the method quantification limit.
 
+Since all equipment blanks have those two flags, our sample data are deemed within spec and we are good to proceed.
 
-For reporting purposes, we don't want to use the raw data (even though Roger has confidence in those numbers). We want to back lab reported values back to 0.001 if they fall below that. This is the first report we are pulling uncensored data. We need to repull and organize all years of data with uncensored and censored and rerun statistics for both (some programs e.g. permitting) may prefer censored data but uncensored could offer smoother CDF curves (remove blocky detection limits that have improved over last 20+ years).
+
+For reporting purposes, we don't want to use the raw data (even though Roger has confidence in those numbers). We want to back lab reported values back to 0.001 if they fall below that. This is the second report we are pulling uncensored data. We need to repull and organize all years of data with uncensored and censored and rerun statistics for both (some programs e.g. permitting) may prefer censored data but uncensored could offer smoother CDF curves (remove blocky detection limits that have improved over last 20+ years).
 
 Jason and I have determined that using uncensored this round is okay because we are only cleaning up the lower end of the dataset and are not coming close to potential standards violations.
 
 ```{r back to positive}
+below0 <- function(x)(if(all(!is.na(x) & x < 0 & is.numeric(x))){return(0.001)}else{x})
+#below0(conventionals$`CADMIUM, DISSOLVED (UG/L AS CD)`)
+
 conventionals2 <- conventionals %>% 
-  mutate_if(is.numeric, ~1 * (. < 0))
-conventionals2[conventionals2 < 0] <- 0.001  
+  rowwise() %>% 
+ # mutate_if(is.numeric, ~0.001 * (. < 0))
+  mutate_at(vars(FDT_FIELD_PH:SSC_TOTAL), below0)
+
 # double check things worked
 summary(conventionals)
 summary(conventionals2) # make sure columns with negative mins have gone to 0.001
-
-#Change longitude back to real numbers
-conventionals2 <- left_join(conventionals2,
-                            dplyr::select(conventionals, FDT_STA_ID, Longitude) %>% 
-                              distinct(FDT_STA_ID, .keep_all = T),
-                            by = 'FDT_STA_ID') %>% 
-  mutate(Longitude.x = Longitude.y) %>% 
-  rename(Longitude = Longitude.x) %>% 
-  dplyr::select(-Longitude.y)
 ```
 
 
@@ -275,9 +298,9 @@ probData <- conventionals2 %>%
               DO = DO_mg_L, 
               pH = FDT_FIELD_PH,
               SpCond = FDT_SPECIFIC_CONDUCTANCE, 
-              TN = NITROGEN_mg_L, 
-              TP = PHOSPHORUS_mg_L, 
-              TDS = TDS_mg_L,
+              TN = NITROGEN_TOTAL_00600_mg_L,
+              TP = PHOSPHORUS_TOTAL_00665_mg_L, 
+              TDS = TDS_mg_L, #this is fine, just a recode of storet 70300
               NH4 = AMMONIA_mg_L, 
               NO3 = NITRATE_mg_L, 
               TKN = NITROGEN_KJELDAHL_TOTAL_00625_mg_L,
@@ -286,8 +309,8 @@ probData <- conventionals2 %>%
               TSS = TSS_mg_L, 
               Na = `SODIUM, DISSOLVED (MG/L AS NA)`, 
               K = `POTASSIUM, DISSOLVED (MG/L AS K)`,
-              Cl = CHLORIDE_mg_L,
-              Sf = SULFATE_mg_L,
+              Cl = CHLORIDE_DISSOLVED_00941_mg_L, #CHLORIDE_mg_L,
+              Sf = SULFATE_DISS_mg_L, #SULFATE_mg_L,
               `70331VFine` = `SSC%Finer`,
               SSCCOARSE = SSC_COARSE,
               SSCFINE =  SSC_FINE, 
@@ -330,9 +353,9 @@ probData <- conventionals2 %>%
               HARDNESS = `HARDNESS, CA MG CALCULATED (MG/L AS CACO3) AS DISSOLVED`,
               MERCURY = `MERCURY-TL,FILTERED WATER,ULTRATRACE METHOD NG/L`,
               `Hg-C` = `RMK_50091`) %>% 
-  dplyr::select(FDT_DATE_TIME, Year, FDT_DEPTH, FDT_SPG_CODE, FDT_COMMENT, Ana_Sam_Mrs_Container_Id_Desc, #other helpful info
-                any_of(names(prob2020))) %>% 
-  dplyr::select(StationID, Year, FDT_DATE_TIME, Year, FDT_DEPTH, FDT_SPG_CODE, FDT_COMMENT, 
+  dplyr::select(FDT_DATE_TIME, FDT_DATE_TIME, Year, FDT_DEPTH, FDT_SPG_CODE, FDT_COMMENT, Ana_Sam_Mrs_Container_Id_Desc, #other helpful info
+                any_of(names(prob2022))) %>% 
+  dplyr::select(StationID, FDT_DATE_TIME, Year, FDT_DATE_TIME, Year, FDT_DEPTH, FDT_SPG_CODE, FDT_COMMENT, 
                 Ana_Sam_Mrs_Container_Id_Desc, everything()) %>% 
   arrange(Year, StationID, FDT_DATE_TIME)
 
@@ -340,6 +363,9 @@ probData <- conventionals2 %>%
 rm(multistationAnalyteData);rm(multistationFieldData);rm(multiStationGIS_View);rm(multiStationInfo)
 rm(conventionalsList);rm(conventionals);rm(conventionals2)
 ```
+
+
+At this point we know there are still too many samples at certain stations that get repeat visits for other sample program codes. We will correct for this in future steps once we have the benthic data to choose the chem results that occurred closest to the bug data.
 
 
 ### Metals CCU
@@ -402,4 +428,208 @@ Last, we need to remove extra samples not associated with FP/bio sampling events
 To do this, we need benthic data.
 
 
+
 ### Benthic Data
+
+Use pinned benthic data to pull appropriate SCI information for sites.
+
+```{r get ecoregion for SCI}
+ecoregion <- pin_get("ejones/WQM-Stations-Spatial", board = "rsconnect") %>% 
+        filter(StationID %in% WQM_Stations_Filter$StationID) %>% 
+  dplyr::select(StationID, US_L3CODE, Basin) %>% 
+  distinct(StationID, .keep_all = T)
+```
+
+Get all SCI information from pinned data. 
+
+```{r SCI pins}
+VSCIresults <- pin_get("ejones/VSCIresults", board = "rsconnect")
+VCPMI63results <- pin_get("ejones/VCPMI63results", board = "rsconnect")
+VCPMI65results <- pin_get("ejones/VCPMI65results", board = "rsconnect")
+```
+
+Bring in correct BenSampID info for sites.
+
+```{r}
+x2021Sites <- filter(WQM_Stations_Filter, Year == 2021)$StationID
+x2022Sites <- filter(WQM_Stations_Filter, Year == 2022)$StationID
+
+bioData2021 <- pin_get("ejones/benSamps", board = "rsconnect") %>% 
+  filter(StationID %in% x2021Sites & year(`Collection Date`) == 2021) %>% 
+  filter(str_detect(BenSampID, 'R110')) %>% # only keep rarified data
+  filter(RepNum == 1)  # only use Rep1
+bioData2022 <- pin_get("ejones/benSamps", board = "rsconnect") %>% 
+  filter(StationID %in% x2022Sites & year(`Collection Date`) == 2022) %>% 
+  filter(str_detect(BenSampID, 'R110')) %>% # only keep rarified data
+  filter(RepNum == 1) # only use Rep1
+
+# make sure no sites are missing biological data (our key to using a site)
+x2021Sites[! x2021Sites %in% bioData2021$StationID]
+x2022Sites[! x2022Sites %in% bioData2022$StationID]
+
+benSamps_Filter_fin <- bind_rows(bioData2021, bioData2022) %>% 
+  left_join(ecoregion, by = 'StationID')
+```
+
+Get correct SCI information. Make sure to grab the VSCI metrics for all stations not run with VSCI and have that ready for final data smashing. We report the VSCI metrics for VCPMI sites for continuity.
+
+```{r}
+# bring in bioassessment decisions
+IR2024bioassessment <- pin_get("ejones/CurrentIRbioassessmentDecisions", board = "rsconnect") %>% 
+  filter(IRYear == 2024 & StationID %in% benSamps_Filter_fin$StationID)
+
+benSamps_Filter_finDecision <- left_join(benSamps_Filter_fin, dplyr::select(IR2024bioassessment, StationID, AssessmentMethod)) %>% 
+  mutate(AssessmentMethod = case_when(StationID = '2-MTC006.95' ~ 'VSCI', # pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") all other 2-MTC stations use VSCI whne Mike assessed
+                                      is.na(AssessmentMethod) & 
+                                      ))
+
+IR20bioassessment <- pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") %>% 
+  filter(IRYear == 2024 & StationID %in% benSamps_Filter_fin$StationID)
+```
+
+
+
+**This is also where we do any SCI overrides. Maybe we can use the bioassessment information from these sites in the future pin_get("ejones/CurrentIRbioassessmentDecisions", board = "rsconnect")**
+
+```{r}
+SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! US_L3CODE %in% c(63,65))$BenSampID) %>%
+  bind_rows(
+    filter(VCPMI63results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(63) | str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
+  bind_rows(
+    filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(65) & !str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
+  mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
+  left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
+              by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
+
+  # make year variable to make review easier
+  mutate(Year = year(`Collection Date`)) %>% 
+  dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
+                Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+  arrange(Year, StationID, `Collection Date`)
+
+
+# after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
+SCI_filter <- filter(SCI_filter, ! StationID %in% c("1AXOR000.47", '8-POR015.70')) %>% 
+  bind_rows(
+    bind_rows(
+      filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, StationID == "1AXOR000.47")$BenSampID),
+      filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin, StationID == '8-POR015.70')$BenSampID)) %>%
+      mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
+      left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
+                by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
+      
+      # make year variable to make review easier
+      mutate(Year = year(`Collection Date`)) %>% 
+      dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
+                    Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+      arrange(Year, StationID, `Collection Date`)
+  ) %>% 
+  dplyr::select(Year, StationID, `Collection Date`, BenSampID, SCI, `SCI Score`) %>% # only actually need these metrics
+  arrange(Year, StationID, `Collection Date`) 
+
+
+# We report VSCI metrics regardless of SCI used for continuity 
+SCImetrics <- filter(VSCIresults, BenSampID %in% SCI_filter$BenSampID) %>% 
+  dplyr::select(BenSampID:`Fam %MFBI Score`)
+
+SCIfinal <- left_join(SCI_filter, SCImetrics, by = c('BenSampID'))
+```
+
+
+While we are pulling data, NRO has requested we ensure the Po River trend site is only using VCPMI65. We will repull all the data for this site, average it, and smash it in to the final dataset later, overwriting previous benthic information.
+
+```{r po river fix}
+
+po <- filter(VCPMI65results, StationID == '8-POR015.70'& `Target Count` == 110) %>% 
+  mutate(Year = year(`Collection Date`)) %>% 
+  filter(Year %in% c(2004,2011,2013,2015,2017))#,2019))# just the samples associated with prob
+# but we only report the VSCI metrics so grab those for these bensamps
+poMetrics <- filter(VSCIresults, BenSampID %in% po$BenSampID)
+
+
+# clean up workspace
+rm(VSCIresults);rm(VCPMI63results);rm(VCPMI65results); rm(bioData2019);rm(bioData2020); rm(benSamps_Filter_fin)
+rm(SCI_filter)
+```
+
+
+Now we can save both of these objects out and manually delete the erroneous rows in probData (things not close to benthic collections). We will average the station data in R after extra data is dropped.
+
+```{r save for manual review}
+#write.csv(probData, 'processedData/prob20192020dataFin.csv', row.names = F, na = '')
+#write.csv(SCIfinal, 'processedData/bio20192020data.csv', row.names = F, na = '')
+```
+
+### Habitat Data
+
+Next we need to get the total habitat scores for each benthic sample.
+
+```{r tot hab}
+habSamps <- bind_rows(pin_get('ejones/habSamps', board = 'rsconnect') %>% 
+                        filter(StationID %in% x2019Sites & year(`Collection Date`) == 2019) ,
+                      pin_get('ejones/habSamps', board = 'rsconnect') %>% 
+                        filter(StationID %in% x2020Sites & year(`Collection Date`) == 2020)) 
+# make sure this is close to nrow SCI_filter
+habValues <- pin_get('ejones/habValues', board = 'rsconnect') %>% 
+  filter(HabSampID %in% habSamps$HabSampID) %>% 
+  group_by(HabSampID) %>% 
+  summarise(TotHab = sum(HabValue))
+
+totHab <- left_join(habSamps, habValues, by = "HabSampID") %>% 
+  mutate(Year = year(`Collection Date`)) %>% 
+  dplyr::select(StationID, Year, `Collection Date`, TotHab)
+# we will do the join to benthic data and average by year farther down the script
+
+#write.csv(totHab, 'processedData/totHab.csv', row.names = F, na = '')
+
+# clean up workspace
+rm(habSamps); rm(habValues)
+```
+
+### LRBS data
+
+This analysis is run using C:\HardDriveBackup\R\GitHub\PhysicalHabitat\PHAB2021\Dec2021run.R and the TMDLsummary_2021-12-09.csv was copy/pasted into this project's processed Data directory.
+
+Data is summarized and QAed below.
+
+```{r lrbs qa}
+names(prob2020) # get the variables we need to match
+
+lrbs <- read.csv('processedData/MasterSummary_2021-12-09.csv') %>% #TMDLsummary_2021-12-09.csv') %>% 
+  dplyr::select(StationID, Date, LRBS = LRBS2, Slope, FN_PCT, SA_PCT, SA_FN_PCT, LSUB_DMM, 
+                BL_CB_GR_Embed_PCT = BL_CB_GRmeanEmbed,
+                Embed_PCT = Xembed ) %>% 
+  mutate(Year = year(Date)) %>% 
+  group_by(StationID, Year) %>% 
+  summarise_at(vars(c(LRBS:Embed_PCT)), mean, na.rm = TRUE) 
+
+# see what stations are missing data from this latest two years
+View(left_join(WQM_Stations_Filter, lrbs, by = c('StationID', 'Year')))
+# cool only the expected 2019 sites don't have lrbs
+
+#write.csv(lrbs, 'processedData/FinalLRBS.csv', row.names = F, na = '')
+```
+
+
+### Geospatial data 
+
+Watershed-specific landcover information is provided for all wadeable probmon sites each IR publication. In order to expedite the process of organizing and analyzing this geospatial dataset, automated scripts have been developed. This project calls these scripts. 
+
+#### Tiger roads organization
+
+Each year a new tiger road file is required to best compare sample year to roads in the watershed. Follow instructions in C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\tigerRoadsWebScrapingScript.R in order to scrape the FTP and organize each year into a single shapefile for analyses.
+
+*** Remember: you need to first create a new directory named the year you are scraping (e.g. 2019) in the local C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\tigerRoadsPull directory for downloadTigerRoadsByYear() and in unzipped directory to work properly.
+
+#### Delineate new watersheds
+
+The C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\Organize20192020prob.Rmd walks users through delineating wadeable and boatable sites sampled in 2019-2020 using automated streamstats delineation methods. Manual review is conducted in either R or ArcGIS. 
+
+#### Landcover analysis
+
+Once all the necessary stations (wadeable) have QAed watershed information, landcover analysis scripts in C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\landcoverAnalysis_20192020.R take users through the automated process of generating the ~100 landcover metrics the prob chapter reports out for wadeable dataset.
+
+
+
+## QA data
+

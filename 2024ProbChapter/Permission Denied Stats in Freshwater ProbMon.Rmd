@@ -1,0 +1,324 @@
+---
+title: "Permission Denied Stats in Freshwater ProbMon"
+author: "Emma Jones"
+date: "4/20/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(inlmisc)
+library(readxl)
+library(config)
+library(pins)
+library(gridExtra)
+
+# Server connection things
+conn <- config::get("connectionSettings") # get configuration settings
+
+
+board_register_rsconnect(key = conn$CONNECT_API_KEY,  #Sys.getenv("CONNECT_API_KEY"),
+                         server = conn$CONNECT_SERVER)#Sys.getenv("CONNECT_SERVER"))
+
+wqmStations <- pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>% 
+  dplyr::select(StationID, Region = ASSESS_REG)
+
+vahu6 <- st_read('C:/HardDriveBackup/R/GitHub/pinData/data/GIS/VA_SUBWATERSHED_6TH_ORDER_STG.shp') # this version of vahu6 layer goes outside state boundary
+subbasinConversion <- read_csv('C:/HardDriveBackup/R/GitHub/pinData/data/subbasinToVAHU6conversion.csv')
+
+subbasinLayer <- st_read('C:/HardDriveBackup/R/GitHub/IR2024/GIS/DEQ_VAHUSB_subbasins_EVJ.shp')  %>% 
+  st_drop_geometry() %>% 
+  rename('SUBBASIN' = 'SUBBASIN_1') %>% 
+  distinct(subbasin, .keep_all = T) %>%  # don't need this by Assessment Region right now so simplify dataset to make next join cleaner
+  dplyr::select(BASIN_NAME, BASIN_CODE, SUBBASIN, subbasin)
+
+unrestrictedAssessmentRegionVAHU6Subbasin <- left_join(vahu6, subbasinConversion, by = c('VAHU6', 'VAHU5')) %>% 
+  left_join(subbasinLayer, by = c('BASIN_CODE' = 'BASIN_CODE',
+                                  'VAHUSB' = 'subbasin'))
+#View(unrestrictedAssessmentRegionVAHU6Subbasin %>% st_drop_geometry())
+```
+
+This report seeks to answer a few questions about site permissions statewide using the Freshwater ProbMon dataset. This dataset is a great way to understand what is going on across the landscape, so though permission statistics aren't a metric one would typically use ProbMon data for, we can draw insights into permissions statewide, regionally, and temporally that might translate to other water monitoring programs.
+
+
+The design status database for Freshwater ProbMon contains information on sites drawn vs sites sampled. We can use this to pull out different statistics on permission.
+
+```{r}
+original <- read.csv('C:/HardDriveBackup/R/GitHub/FreshwaterProbMonIntegratedReports/2022ProbChapter/processedData/designStatusIR2022.csv') %>% 
+  mutate(StationID = sub("_.*$",'', sampleID)) %>% 
+  left_join(wqmStations %>% distinct(StationID, .keep_all = TRUE), by = "StationID")
+
+recent <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virginia/Freshwater ProbMon/IR2024/Wadeable_ProbMon2021-2022.xlsx') %>% 
+  dplyr::select(StationID, siteID, StationID_Trend, Region, `Latitude.DD` = Latitude, `Longitude.DD` = Longitude, status, Year) %>% 
+  mutate(StationID = coalesce(StationID, siteID),
+         sampleID = coalesce(StationID_Trend, StationID))
+
+designStatus <- bind_rows(original, recent) %>%
+  mutate(comment = as.character(comment)) %>% 
+  st_as_sf(coords = c("Longitude.DD", "Latitude.DD"),  # make spatial layer using these columns
+            remove = F, # don't remove these lat/lon cols from df
+            crs = 4326)
+
+# join region by spatial information
+sfdesignStatus <- designStatus %>% 
+  st_intersection(unrestrictedAssessmentRegionVAHU6Subbasin)
+
+designStatus <- sfdesignStatus %>% st_drop_geometry()
+```
+
+
+First find out how many sites sampled. Have to be creative here bc boatable is coded differently
+
+```{r}
+boatable <- filter(designStatus, !is.na(status)) %>%
+  filter(status %in% c('NT', "OT")) %>%
+  filter(str_detect(comment, c("boatable", "Boatable", "TS-boatable",'boat', 'Bo') ) |
+           str_detect(comment, c('Large', 'large')) |
+           str_detect(comment, c('Boat site')) |
+           str_detect(comment, "Boatable") |
+           str_detect(comment, 'Large River') |
+           str_detect(comment, 'Fall only - boat'))
+wadeable <- filter(designStatus, status =='TS')
+
+sampledSites <- rbind(wadeable, boatable)
+```
+
+How many sites have we sampled vs drawn in 2001-2022?
+
+Sampled = `r nrow(sampledSites)` vs drawn `r nrow(designStatus)` 
+
+What percent of sites have we sampled vs drawn in 2001-2022?
+
+```{r}
+nrow(sampledSites) / nrow(designStatus) * 100
+```
+72%
+
+
+How many permission denied sites 2001-2022?
+
+```{r}
+nrow(filter(designStatus, status == 'PD'))
+```
+
+What percent permission denied compared to all sites 2001-2022?
+
+```{r}
+nrow(filter(designStatus, status == 'PD')) / nrow(filter(designStatus, !is.na(status))) * 100
+```
+roughly 7.5% across 2001-2022
+
+How does that compare to other categories that were not sampled?
+
+NT (dry, boatable, beavers, etc.)
+
+```{r}
+nrow(filter(designStatus, status == 'NT')) / nrow(filter(designStatus, !is.na(status))) * 100
+```
+29%
+
+Our records on non sampled sites isn't great pre 2019, what was the % denial 2001-2018 and then 2019-2022?
+
+```{r}
+# 2001-2018
+pre <- filter(designStatus, is.na(Year)) %>% 
+  bind_rows(filter(designStatus, Year %in% 2001:2018))
+nrow(filter(pre, status == 'PD')) / nrow(pre) * 100
+preAnnualEstimate <-  nrow(filter(pre, status == 'PD')) / 18  
+
+# # 2019
+# nrow(filter(designStatus, Year == 2019 & status == 'PD')) / nrow(filter(designStatus, Year == 2019)) * 100
+# # 2020
+# nrow(filter(designStatus, Year == 2020 & status == 'PD')) / nrow(filter(designStatus, Year == 2020)) * 100
+# # 2021
+# nrow(filter(designStatus, Year == 2021 & status == 'PD')) / nrow(filter(designStatus, Year == 2021)) * 100
+# # 2022
+# nrow(filter(designStatus, Year == 2022 & status == 'PD')) / nrow(filter(designStatus, Year == 2022)) * 100
+
+stats <- tibble( Year = 2001:2022) %>%  
+                 # `Number Permission Denial` = as.numeric(NA), 
+                 # `Pct Permission Denial` = NA) %>% 
+  mutate(`Number Permission Denial` = case_when(Year %in% 2001:2018 ~ preAnnualEstimate,
+                                                Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD')) %>% as.numeric(),
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD')) %>% as.numeric(),
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD')) %>% as.numeric(),
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD')) %>% as.numeric()),
+         `Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD')) / nrow(pre) * 100,
+                                                Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD')) / nrow(filter(designStatus, Year == 2019)) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD')) / nrow(filter(designStatus, Year == 2020)) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD')) / nrow(filter(designStatus, Year == 2021)) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD')) / nrow(filter(designStatus, Year == 2022)) * 100),
+         `BRRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'BRRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'BRRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'BRRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'BRRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'BRRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'BRRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'BRRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'BRRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'BRRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'BRRO')) * 100),
+         `PRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'PRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'PRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'PRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'PRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'PRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'PRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'PRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'PRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'PRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'PRO')) * 100),
+         `NRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'NRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'NRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'NRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'NRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'NRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'NRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'NRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'NRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'NRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'NRO')) * 100),
+         `VRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'VRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'VRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'VRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'VRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'VRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'VRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'VRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'VRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'VRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'VRO')) * 100),
+         `SWRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'SWRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'SWRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'SWRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'SWRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'SWRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'SWRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'SWRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'SWRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'SWRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'SWRO')) * 100),
+         `TRO Pct Permission Denial`  = case_when(Year %in% 2001:2018 ~ nrow(filter(pre, status == 'PD' & ASSESS_REG == 'TRO')) / 
+                                                     nrow(filter(pre, ASSESS_REG == 'TRO')) * 100,
+                                                   Year == 2019 ~ nrow(filter(designStatus, Year == 2019 & status == 'PD'  & ASSESS_REG == 'TRO')) / 
+                                                     nrow(filter(designStatus, Year == 2019 & ASSESS_REG == 'TRO')) * 100,
+                                                Year == 2020 ~ nrow(filter(designStatus, Year == 2020 & status == 'PD' & ASSESS_REG == 'TRO')) /
+                                                  nrow(filter(designStatus, Year == 2020 & ASSESS_REG == 'TRO')) * 100,
+                                                Year == 2021 ~ nrow(filter(designStatus, Year == 2021 & status == 'PD'  & ASSESS_REG == 'TRO')) / 
+                                                  nrow(filter(designStatus, Year == 2021 & ASSESS_REG == 'TRO')) * 100,
+                                                Year == 2022 ~ nrow(filter(designStatus, Year == 2022 & status == 'PD' & ASSESS_REG == 'TRO')) /
+                                                  nrow(filter(designStatus, Year == 2022 & ASSESS_REG == 'TRO')) * 100)
+         )
+         
+         
+```
+
+Statewide plots
+
+```{r}
+ggplot(stats, aes(x = Year, y = `Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+  ggtitle("Statewide Percent Permission Denied By Year")+
+  theme_bw()
+```
+
+
+```{r}
+ggplot(stats, aes(x = Year, y = `Number Permission Denial`))+
+  geom_bar(stat="identity")+
+  ggtitle("Statewide Number of Sites Permission Denied By Year")+
+  theme_bw()
+```
+
+
+Percent Permission Denied by Region
+
+```{r}
+BRRO <- ggplot(stats, aes(x = Year, y = `BRRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+  ylab("BRRO % PD")+
+  #ggtitle("BRRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+PRO <- ggplot(stats, aes(x = Year, y = `PRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+    ylab("PRO % PD")+
+
+  #ggtitle("PRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+NRO <- ggplot(stats, aes(x = Year, y = `NRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+    ylab("NRO % PD")+
+
+  #ggtitle("NRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+VRO <- ggplot(stats, aes(x = Year, y = `VRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+    ylab("VRO % PD")+
+
+  #ggtitle("VRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+SWRO <- ggplot(stats, aes(x = Year, y = `SWRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+    ylab("SWRO % PD")+
+
+  #ggtitle("VRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+TRO <- ggplot(stats, aes(x = Year, y = `TRO Pct Permission Denial`))+
+  geom_bar(stat="identity")+
+    ylab("TRO % PD")+
+
+  #ggtitle("VRO Percent of Sites Permission Denied By Year")+
+  theme_bw()
+
+
+grid.arrange(arrangeGrob(BRRO, 
+                         NRO,
+                         PRO,
+                         VRO,
+                         SWRO, TRO,
+                         nrow = 3),    nrow=1)
+```
+
+
+Statewide map of sites that were permission denied 2001-2022:
+
+```{r}
+library(leaflet)
+library(inlmisc)
+
+assessmentRegions <- st_as_sf(pin_get('ejones/AssessmentRegions_simple', board = 'rsconnect'))
+basins <- unrestrictedAssessmentRegionVAHU6Subbasin %>% 
+  group_by(BASIN_NAME) %>% summarise()
+
+ # color palette for assessment polygons
+  pal <- colorFactor(
+    palette = topo.colors(7),
+    domain = assessmentRegions$ASSESS_REG)
+PD <- filter(sfdesignStatus, status == 'PD') 
+
+CreateWebMap(maps = c("Topo","Imagery","Hydrography"), collapsed = TRUE, 
+                 options= leafletOptions(zoomControl = TRUE,minZoom = 3, maxZoom = 20,
+                                         preferCanvas = TRUE)) %>%
+      setView(-78, 37.5, zoom=7)  %>% 
+      addPolygons(data= assessmentRegions,  color = 'black', weight = 1,
+                  fillColor= ~pal(assessmentRegions$ASSESS_REG), fillOpacity = 0.5,stroke=0.1,
+                  group="Assessment Regions",
+                  label = ~ASSESS_REG, layerId = ~ASSESS_REG)  %>% hideGroup('Assessment Regions') %>% 
+  addPolygons(data= basins,  color = 'black', weight = 1,
+                  fillColor= ~pal(basins$BASIN_NAME), fillOpacity = 0.5,stroke=0.1,
+                  group="Major Basins",
+                  label = ~BASIN_NAME, layerId = ~BASIN_NAME) %>% hideGroup('Major Basins') %>% 
+  addCircleMarkers(data = PD, color='blue', fillColor='yellow', radius = 4,
+                       fillOpacity = 0.5,opacity=0.8,weight = 2,stroke=T, group="Permission Denied Sites",
+                       label = ~sampleID, layerId = ~sampleID) %>%
+      addLayersControl(baseGroups=c("Topo","Imagery","Hydrography"),
+                       overlayGroups = c('Permission Denied Sites',
+                                         "Major Basins",
+                                         'Assessment Regions'),
+                       options=layersControlOptions(collapsed=T),
+                       position='topleft')
+```
+

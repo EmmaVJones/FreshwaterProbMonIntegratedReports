@@ -1,0 +1,6 @@
+IR2024 Prob Chapter updates:
+
+- Kristen edits
+- NLCD2019 landcover, impervious
+- TIGERroads 2021-2022
+- Census 2020????? will add more pop stats fields to spatial section
