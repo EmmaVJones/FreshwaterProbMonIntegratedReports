@@ -55,7 +55,10 @@ Below is the final dataset for the 2022 IR that we will aim to match for 2024 IR
 This version (_EVJ) was used because it includes the transition of the NRO site naming issue 1AQUA004.14 to 1AQUA004.35. The original data published online for IR2022 is still available in 'originalData/originalOriginal/Wadeable_ProbMon_2001-2020.csv' but this version represents the best data to move forward with for IR2024. Since Lucy is awesome, she combined these data in previous reports and kept the ProbMon name 1AQUA004.14 to represent the station. Emma updated that station in the _EVJ spreadsheet on 2/6/2023 so when carried forward, this station will me known as 1AQUA004.35.
 
 ```{r prob 2022}
-prob2022 <- read_csv('originalData/Wadeable_ProbMon_2001-2020_EVJ.csv') 
+prob2022 <- read_csv('originalData/Wadeable_ProbMon_2001-2020_EVJ.csv') %>% 
+  rename(`Ortho-P` = 'Ortho.P',
+         'Hg-C' = 'Hg.C', 
+         '70331VFine' = 'X70331VFine')
 ```
 
 Generally speaking, we need to hit a few data sources to acquire all the data we need to publish for final chapter:
@@ -279,8 +282,8 @@ conventionals2 <- conventionals %>%
   mutate_at(vars(FDT_FIELD_PH:SSC_TOTAL), below0)
 
 # double check things worked
-summary(conventionals)
-summary(conventionals2) # make sure columns with negative mins have gone to 0.001
+#summary(conventionals)
+#summary(conventionals2) # make sure columns with negative mins have gone to 0.001
 ```
 
 
@@ -360,8 +363,8 @@ probData <- conventionals2 %>%
   arrange(Year, StationID, FDT_DATE_TIME)
 
 #clean up workspace
-rm(multistationAnalyteData);rm(multistationFieldData);rm(multiStationGIS_View);rm(multiStationInfo)
-rm(conventionalsList);rm(conventionals);rm(conventionals2)
+rm(multistationAnalyteData, multistationFieldData, multiStationGIS_View, multiStationInfo, 
+   conventionalsList, conventionals, conventionals2)
 ```
 
 
@@ -420,6 +423,7 @@ probData <- left_join(probData, metalsCCUresults,
 
 ``` 
 
+Sorting MCCU decreasing shows none of the values are above the "no risk to aquatic life" BSA threshold of 0.75 CCU, great news.
 
 
 
@@ -479,24 +483,31 @@ IR2024bioassessment <- pin_get("ejones/CurrentIRbioassessmentDecisions", board =
   filter(IRYear == 2024 & StationID %in% benSamps_Filter_fin$StationID)
 
 benSamps_Filter_finDecision <- left_join(benSamps_Filter_fin, dplyr::select(IR2024bioassessment, StationID, AssessmentMethod)) %>% 
-  mutate(AssessmentMethod = case_when(StationID = '2-MTC006.95' ~ 'VSCI', # pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") all other 2-MTC stations use VSCI whne Mike assessed
-                                      is.na(AssessmentMethod) & 
-                                      ))
+  mutate(AssessmentMethod = case_when(StationID == '2-MTC006.95' ~ 'VSCI', 
+                                      # pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") all other 2-MTC stations use VSCI when Mike assessed
+                                      # fix George's that haven't been bioassessed yet
+                                      is.na(AssessmentMethod) & `Collected By` %in% c('GEORGEJ DEVLIN', 'LucyK Baker') ~ 'VSCI',
+                                      TRUE ~ AssessmentMethod ))
 
-IR20bioassessment <- pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") %>% 
-  filter(IRYear == 2024 & StationID %in% benSamps_Filter_fin$StationID)
+# after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
+#c("1AXOR000.47", '8-POR015.70') to VSCI
 ```
 
 
-
-**This is also where we do any SCI overrides. Maybe we can use the bioassessment information from these sites in the future pin_get("ejones/CurrentIRbioassessmentDecisions", board = "rsconnect")**
+Now pull the actual metric information according to the SCI the bios have chosen
 
 ```{r}
-SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! US_L3CODE %in% c(63,65))$BenSampID) %>%
+SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_finDecision, AssessmentMethod == "VSCI")$BenSampID) %>%
   bind_rows(
-    filter(VCPMI63results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(63) | str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
+    filter(VCPMI63results, BenSampID %in% filter(benSamps_Filter_finDecision, AssessmentMethod == "VCPMI + 63")$BenSampID)  ) %>%
   bind_rows(
-    filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(65) & !str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
+    filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_finDecision, AssessmentMethod == "VCPMI - 65")$BenSampID)  ) %>%
+  # pre bioassessment method based on ecoregion and basin, bioassessment method is better bc bio makes SCI decision
+  # filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! US_L3CODE %in% c(63,65))$BenSampID) %>%
+  # bind_rows(
+  #   filter(VCPMI63results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(63) | str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
+  # bind_rows(
+  #   filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin,  US_L3CODE %in% c(65) & !str_detect(Basin, "Chowan"))$BenSampID)  ) %>%
   mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
   left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
               by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
@@ -504,28 +515,8 @@ SCI_filter <- filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, ! U
   # make year variable to make review easier
   mutate(Year = year(`Collection Date`)) %>% 
   dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
-                Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
+                Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`) %>% 
   arrange(Year, StationID, `Collection Date`)
-
-
-# after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
-SCI_filter <- filter(SCI_filter, ! StationID %in% c("1AXOR000.47", '8-POR015.70')) %>% 
-  bind_rows(
-    bind_rows(
-      filter(VSCIresults, BenSampID %in% filter(benSamps_Filter_fin, StationID == "1AXOR000.47")$BenSampID),
-      filter(VCPMI65results, BenSampID %in% filter(benSamps_Filter_fin, StationID == '8-POR015.70')$BenSampID)) %>%
-      mutate(SeasonGradient = as.factor(paste0(Season, " (",Gradient,")"))) %>%
-      left_join(dplyr::select(benSamps_Filter_fin, StationID, BenSampID, RepNum, `Collection Date`) ,
-                by = c('StationID', 'BenSampID', 'RepNum', 'Collection Date')) %>%
-      
-      # make year variable to make review easier
-      mutate(Year = year(`Collection Date`)) %>% 
-      dplyr::select(StationID, Year, `Collection Date`, Season, BenSampID, RepNum, SCI, `SCI Score`, `SCI Threshold`,
-                    Gradient, `Target Count`,  `Sample Comments`, `Collected By`:`Entered Date`, everything()) %>% 
-      arrange(Year, StationID, `Collection Date`)
-  ) %>% 
-  dplyr::select(Year, StationID, `Collection Date`, BenSampID, SCI, `SCI Score`) %>% # only actually need these metrics
-  arrange(Year, StationID, `Collection Date`) 
 
 
 # We report VSCI metrics regardless of SCI used for continuity 
@@ -536,28 +527,26 @@ SCIfinal <- left_join(SCI_filter, SCImetrics, by = c('BenSampID'))
 ```
 
 
-While we are pulling data, NRO has requested we ensure the Po River trend site is only using VCPMI65. We will repull all the data for this site, average it, and smash it in to the final dataset later, overwriting previous benthic information.
+While we are pulling data, in IR2022 NRO has requested we ensure the Po River trend site is only using VCPMI65. For IR2024, they want all VSCI.  We will repull all the data for this site, average it, and smash it in to the final dataset later, overwriting previous benthic information.
 
 ```{r po river fix}
-
-po <- filter(VCPMI65results, StationID == '8-POR015.70'& `Target Count` == 110) %>% 
+po <- filter(VSCIresults, StationID == '8-POR015.70'& `Target Count` == 110) %>% 
   mutate(Year = year(`Collection Date`)) %>% 
-  filter(Year %in% c(2004,2011,2013,2015,2017))#,2019))# just the samples associated with prob
+  filter(Year %in% c(2004,2011,2013,2015,2017,2019))# just the samples associated with prob
 # but we only report the VSCI metrics so grab those for these bensamps
 poMetrics <- filter(VSCIresults, BenSampID %in% po$BenSampID)
 
 
 # clean up workspace
-rm(VSCIresults);rm(VCPMI63results);rm(VCPMI65results); rm(bioData2019);rm(bioData2020); rm(benSamps_Filter_fin)
-rm(SCI_filter)
+rm(VSCIresults, VCPMI63results,VCPMI65results,bioData2021, bioData2022,benSamps_Filter_fin, SCI_filter, ecoregion)
 ```
 
 
 Now we can save both of these objects out and manually delete the erroneous rows in probData (things not close to benthic collections). We will average the station data in R after extra data is dropped.
 
 ```{r save for manual review}
-#write.csv(probData, 'processedData/prob20192020dataFin.csv', row.names = F, na = '')
-#write.csv(SCIfinal, 'processedData/bio20192020data.csv', row.names = F, na = '')
+#write.csv(probData, 'processedData/prob20212022data.csv', row.names = F, na = '')
+#write.csv(SCIfinal, 'processedData/bio20212022data.csv', row.names = F, na = '')
 ```
 
 ### Habitat Data
@@ -566,14 +555,16 @@ Next we need to get the total habitat scores for each benthic sample.
 
 ```{r tot hab}
 habSamps <- bind_rows(pin_get('ejones/habSamps', board = 'rsconnect') %>% 
-                        filter(StationID %in% x2019Sites & year(`Collection Date`) == 2019) ,
+                        filter(StationID %in% x2021Sites & year(`Collection Date`) == 2021) ,
                       pin_get('ejones/habSamps', board = 'rsconnect') %>% 
-                        filter(StationID %in% x2020Sites & year(`Collection Date`) == 2020)) 
+                        filter(StationID %in% x2022Sites & year(`Collection Date`) == 2022))  %>% 
+  filter(HabSampID != 'EBG16724') # bad data point in db
 # make sure this is close to nrow SCI_filter
 habValues <- pin_get('ejones/habValues', board = 'rsconnect') %>% 
   filter(HabSampID %in% habSamps$HabSampID) %>% 
   group_by(HabSampID) %>% 
-  summarise(TotHab = sum(HabValue))
+  summarise(TotHab = sum(HabValue)) %>% 
+  filter(HabSampID != 'EBG16724') # bad data point in db
 
 totHab <- left_join(habSamps, habValues, by = "HabSampID") %>% 
   mutate(Year = year(`Collection Date`)) %>% 
@@ -583,19 +574,19 @@ totHab <- left_join(habSamps, habValues, by = "HabSampID") %>%
 #write.csv(totHab, 'processedData/totHab.csv', row.names = F, na = '')
 
 # clean up workspace
-rm(habSamps); rm(habValues)
+rm(habSamps, habValues)
 ```
 
 ### LRBS data
 
-This analysis is run using C:\HardDriveBackup\R\GitHub\PhysicalHabitat\PHAB2021\Dec2021run.R and the TMDLsummary_2021-12-09.csv was copy/pasted into this project's processed Data directory.
+This analysis is run using the LRBS R code (May2023run.R) (now run by Aerin) and the MasterSummary_2023-6-1.csv was copy/pasted into this project's processed Data directory.
 
 Data is summarized and QAed below.
 
 ```{r lrbs qa}
-names(prob2020) # get the variables we need to match
+#names(prob2022) # get the variables we need to match
 
-lrbs <- read.csv('processedData/MasterSummary_2021-12-09.csv') %>% #TMDLsummary_2021-12-09.csv') %>% 
+lrbs <- read.csv('processedData/MasterSummary_2023-06-01.csv') %>% 
   dplyr::select(StationID, Date, LRBS = LRBS2, Slope, FN_PCT, SA_PCT, SA_FN_PCT, LSUB_DMM, 
                 BL_CB_GR_Embed_PCT = BL_CB_GRmeanEmbed,
                 Embed_PCT = Xembed ) %>% 
@@ -605,7 +596,8 @@ lrbs <- read.csv('processedData/MasterSummary_2021-12-09.csv') %>% #TMDLsummary_
 
 # see what stations are missing data from this latest two years
 View(left_join(WQM_Stations_Filter, lrbs, by = c('StationID', 'Year')))
-# cool only the expected 2019 sites don't have lrbs
+
+# all missing LRBS sites are known issues
 
 #write.csv(lrbs, 'processedData/FinalLRBS.csv', row.names = F, na = '')
 ```
@@ -623,13 +615,559 @@ Each year a new tiger road file is required to best compare sample year to roads
 
 #### Delineate new watersheds
 
-The C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\Organize20192020prob.Rmd walks users through delineating wadeable and boatable sites sampled in 2019-2020 using automated streamstats delineation methods. Manual review is conducted in either R or ArcGIS. 
+The C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\Organize20212022prob.Rmd walks users through delineating wadeable and boatable sites sampled in 2021-2022 using automated streamstats delineation methods. Manual review is conducted in either R or ArcGIS. 
 
 #### Landcover analysis
 
-Once all the necessary stations (wadeable) have QAed watershed information, landcover analysis scripts in C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\landcoverAnalysis_20192020.R take users through the automated process of generating the ~100 landcover metrics the prob chapter reports out for wadeable dataset.
+Once all the necessary stations (wadeable) have QAed watershed information, landcover analysis scripts in C:\HardDriveBackup\R\GitHub\LandcoverAnalysis\ProbMonOrganization\landcoverAnalysis_20212022.R take users through the automated process of generating the ~100 landcover metrics the prob chapter reports out for wadeable dataset.
 
 
 
 ## QA data
+
+From here, even though it is painful, the best QA method is to open up prop20212022data.csv and bio20212022data.csv and manually go through the chemistry and bug results to make sure all bug samples are there and consolidate/delete extra field/chem data (this result is stored in prop20212022data_QAed.csv). Splits, wonky field/chem collection compared to bugs, etc. can make this automation of that QA process not worth it.
+
+### Summarize Field/Chem/Bio by Year
+
+Bring in this clean field/chem/metals data, average by year, and output one more time for super QA. Note that mercury is separate bc we want the comment code. Hg collected once annually so the average is of 1. 
+
+```{r}
+probDataQAed <- read.csv('processedData/prob20212022data_QAed.csv') %>% 
+  rename(`Ortho-P` = 'Ortho.P',
+         `Hg-C` = 'Hg.C') %>% 
+    # make sure only one row per date/time
+  group_by(StationID, FDT_DATE_TIME) %>% 
+  mutate(n = n()) %>% 
+  dplyr::select(n , StationID: SSCTOTAL, MetalCCU, everything()) %>% ungroup()
+  # if everything fine, proceed
+
+  
+# average by year
+probDataQAedAvg <- probDataQAed %>% 
+  dplyr::select(-c(n, FDT_DATE_TIME, Ana_Sam_Mrs_Container_Id_Desc, FDT_SPG_CODE, FDT_COMMENT, FDT_DEPTH)) %>% ungroup() %>% 
+  # get one row per StationID
+  group_by(StationID, Year) %>% 
+  summarise_at(vars(DO:HARDNESS), mean, na.rm = TRUE) %>% 
+  # change NaN to NA
+  pivot_longer(cols =DO:HARDNESS,names_to = 'Parameter', values_to = 'Value')
+probDataQAedAvg$Value[probDataQAedAvg$Value== 'NaN'] <- NA
+probDataQAedAvg <- pivot_wider(probDataQAedAvg, names_from = 'Parameter', values_from = 'Value')
+
+
+# have to do mercury separately bc we want the comment code
+probDataQAedHg <- dplyr::select(probDataQAed, StationID, Year, MERCURY, `Hg-C`) %>%  
+  mutate(`Hg-C` = as.character(`Hg-C`)) %>% 
+  filter(!is.na(MERCURY) | !is.na(`Hg-C`)) %>%
+  filter(MERCURY != "" | `Hg-C` != "") %>% 
+  group_by(StationID, Year) %>% 
+  summarise(MERCURY = mean(MERCURY, na.rm = T),
+            HgCom = unique(`Hg-C`)) 
+# change any NaN's back to NA and review manually to make sure no data lost
+probDataQAedHg$MERCURY[probDataQAedHg$MERCURY== 'NaN'] <- NA
+
+
+# smash lucyAvg and lucyHg together to a single, clean dataset
+probDataQAedFin <- left_join(probDataQAedAvg, probDataQAedHg, by = c('StationID', 'Year'))
+
+
+
+# save and manually review one last time
+#write.csv(probDataQAedFin, 'processedData/FinalFieldAnalyteMetals.csv', row.names = F, na= '')
+# went through and manually checked all blanks, 0's, and random points to make sure data looks good
+
+# clean up workspace
+rm(probDataQAedAvg, probDataQAed)
+```
+
+### Summarize Bugs
+
+Now we need to convert the VCPMI scores to VSCI scale for analyses and make one row per bug record where more than one sample were collected per year to ensure data joins cleanly and CDF analysis can run.
+
+```{r bugAvg and hab avg}
+source('VCPMItoVSCIconversion.R')
+
+bugAvg <- SCIfinal %>% 
+  full_join(totHab, by = c('StationID', 'Collection Date', 'Year')) %>% 
+  
+  # # QA data
+  # dplyr::select(-c(`Family Total Taxa`:`Fam %MFBI Score`)) %>%
+  # group_by(StationID, `Collection Date`) %>%
+  # mutate(n = n())
+
+  filter(!is.na(SCI)) %>% # 2-HOU001.51 dropped bc bad sample
+  
+  group_by(StationID, Year, SCI) %>% 
+  summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:TotHab)), mean, na.rm = TRUE) %>% 
+  mutate(VSCIVCPMI = case_when(SCI == 'VSCI' ~ `SCI Score`,
+                               SCI != 'VSCI' ~ VCPMItoVSCIconversion(`SCI Score`, probRatio),
+                               TRUE ~ as.numeric(NA))) %>% 
+  dplyr::select(StationID, Year, TotHab,
+                TotTaxa = `Family Total Taxa`,
+                EPTTax = `Family EPT Taxa`,
+                VEphem = `%Ephem`,
+                VPTHydropsychidae = `%PT - Hydropsychidae`,
+                VScrap = `%FamilyScraper`,
+                VChiro = `%Chiro`,
+                V2Dom = `Family %2 Dominant`,
+                HBI = `Family HBI`,
+                #VHapto = ????????? # dropped from this report bc could not make joins to old EDAS taxa info easily after EDAS-CEDS data updates
+                EPTInd = `Family EPT Taxa`,
+                VSCIVCPMI)
+
+# no habitat 8-NAR006.75 2021
+  
+
+
+#write.csv(bugAvg, 'processedData/FinalBugHabitatMetrics.csv', row.names = F, na = '')
+```
+
+
+And back to the Po fix, run the VSCI conversion on those samples and combine the benthic metrics by year.
+
+```{r po fix2}
+# first get VSCI metrics associated with site and VCPMI65 score
+poFix <- left_join(dplyr::select(poMetrics, BenSampID: `Fam %MFBI Score`, StationID),
+                   dplyr::select(po, BenSampID, SCI, `SCI Score`, Year, StationID),
+                   by = c('BenSampID',  'StationID')) %>% 
+# then average everything by year
+group_by(StationID, Year, SCI) %>% 
+summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:`Fam %MFBI Score`)), mean, na.rm = TRUE) %>% 
+# then covert average VCPMI65 to VSCIVCPMI scale
+  mutate( VSCIVCPMI = case_when(SCI == 'VSCI' ~ `SCI Score`,
+                               SCI != 'VSCI' ~ VCPMItoVSCIconversion(`SCI Score`, probRatio),
+                               TRUE ~ as.numeric(NA))) %>% 
+  dplyr::select(StationID, Year,# TotHab,
+                TotTaxa = `Family Total Taxa`,
+                EPTTax = `Family EPT Taxa`,
+                VEphem = `%Ephem`,
+                VPTHydropsychidae = `%PT - Hydropsychidae`,
+                VScrap = `%FamilyScraper`,
+                VChiro = `%Chironomidae Score`,
+                V2Dom = `Family %2 Dominant`,
+                HBI = `Family HBI`,
+                #VHapto = ????????? # dropped from this report bc could not make joins to old EDAS taxa info easily after EDAS-CEDS data updates
+                EPTInd = `Family EPT Taxa`,
+                VSCIVCPMI) 
+
+rm(po); rm(poMetrics)
+# clean up workspace
+rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregion)
+
+```
+
+Now overwrite these results for all previous Po results.
+
+```{r Po Overwrite}
+prob2022new <- filter(prob2022, StationID != '8-POR015.70')
+prob2022Po <- filter(prob2022, StationID == '8-POR015.70') %>% 
+  dplyr::select(-c(TotTaxa:VSCIVCPMI)) %>% 
+  mutate(VHapto = NA) %>% # placeholder
+  left_join(poFix, by = c('StationID', 'Year')) %>% 
+  dplyr::select(names(prob2022new))
+
+prob2022 <- bind_rows(prob2022new, prob2022Po) %>% 
+  arrange(Year, StationID)
+
+#write.csv(prob2022, 'processedData/prob2022PoFix.csv', row.names = F, na = '')
+
+rm(prob2022new, prob2022Po, poFix, poMetrics, po)
+```
+
+
+
+# Combine data
+
+
+Bring in corrected prob2022 with Po river fix.
+
+```{r prob2020}
+prob2022 <- read.csv('processedData/prob2022PoFix.csv') %>% 
+   rename('Ortho-P' = 'Ortho.P',
+         'Hg-C' = 'Hg.C', 
+         '70331VFine' = 'X70331VFine')
+```
+
+
+Bring in Field, Analyte, and Metals Data
+
+```{r field}
+field <- read.csv('processedData/FinalFieldAnalyteMetals.csv') %>%
+  rename('Ortho-P' = 'Ortho.P',
+         'Hg-C' = 'HgCom', 
+         '70331VFine' = 'X70331VFine')
+
+```
+
+Bring in Bug and habitat data
+
+```{r bug}
+bugs <- read.csv('processedData/FinalBugHabitatMetrics.csv') 
+```
+
+
+Bring in LRBS data
+
+```{r lrbs}
+lrbs <- read.csv('processedData/FinalLRBS.csv')
+```
+
+Bring in metadata
+
+```{r}
+stationMetadata <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virginia/Freshwater ProbMon/IR2024/Wadeable_ProbMon2021-2022.xlsx',
+                                  #'originalData/Wadeable_ProbMon2021-2022.xlsx', # or from here for local archiving
+                                  sheet = 'withMetadata') %>% 
+    filter(status == 'TS') %>% # keep only wadeable sites that were sampled for data querying
+  mutate(DataSource = 'State ProbMon') %>% 
+  dplyr::select(DataSource, StationID, Year, StationID_Trend, LongitudeDD = Longitude, LatitudeDD = Latitude, stratum, designweight,
+                weightcategory, station, state, status, comment, set) %>%
+  mutate(station = as.numeric(NA)) %>% #drop this count bc confusing
+  arrange(Year)
+```
+
+
+
+
+### Hold on landcover until more solid
+
+Bring in landcover data
+
+```{r landcover}
+landcover <- read.csv('C:/HardDriveBackup/R/GitHub/LandcoverAnalysis/Results/ProbWadeable20212022/Result10.csv') 
+# fix buffalo trend issue
+buff <- filter(landcover, StationID == '4ABNN002.17') %>% 
+  mutate(YearSampled = c(2021,2022))
+landcover <- landcover %>% 
+  filter(StationID != '4ABNN002.17') %>% 
+  bind_rows(buff) %>% 
+  arrange(YearSampled)
+
+rm(buff)
+```
+
+Smash data
+
+```{r data smash}
+prob2022fin <- prob2022 %>% 
+  mutate(IR2024 = as.numeric(NA)) %>% #placeholder
+  dplyr::select(DataSource:IR2022, IR2024, DO:STXRD )
+#names(prob2020fin) # what to match
+
+finalSmash <- stationMetadata %>% #dplyr::select(WQM_Stations_Filter, DataSource:set) %>% 
+  # add in population information later
+  left_join(field, by = c('StationID', 'Year')) %>% 
+  left_join(lrbs, by = c('StationID', 'Year')) %>% 
+  left_join(bugs, by = c('StationID', 'Year')) %>% 
+  left_join(landcover %>%
+              mutate(Year = YearSampled),
+            by = c('StationID', 'Year'))
+
+
+
+# clean up workspace
+rm(bugs);rm(field);rm(landcover);rm(lrbs);rm(metalsCCUresults);rm(probData)
+```
+
+
+
+
+```{r}
+names(prob2022fin)[! names(prob2022fin) %in% names(finalSmash)]
+
+```
+
+
+
+## Attach final metadata
+
+
+First, where possible, get metadata from previous years.
+
+```{r grab previous metdata}
+# get what you can from previous metadat
+previousInfo <- filter(prob2022fin, StationID %in% finalSmash$StationID) %>% 
+  distinct(StationID, .keep_all = T)
+previousInfoMetadata <-  filter(prob2022fin, StationID %in% previousInfo$StationID) %>%  
+                                  dplyr::select(StationID, Basin, SubBasin, BayShed, EcoRegion, 
+                                                BioRegion, Order, BasinSize, StreamSizeCat) %>% 
+                                  distinct(StationID, .keep_all = T)
+```
+
+Use pinned data to get other basic metadata.
+
+```{r new sites}
+finalSmashMetadata <- filter(finalSmash, ! StationID %in% previousInfoMetadata$StationID) %>% 
+  left_join(pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>%
+              filter(StationID %in% finalSmash$StationID) %>% 
+              distinct(StationID, .keep_all = T) %>% 
+              dplyr::select(StationID, Basin, US_L3NAME, Basin_Code), 
+            by = 'StationID') %>% 
+  mutate(Basin = case_when(Basin %in% c("James River Basin" ) ~ "James",
+                           Basin %in% c("Roanoke River Basin" ) ~ "Roanoke",
+                           Basin %in% c( "New River Basin"  ) ~ "New",
+                           Basin %in% c( "Potomac River Basin" , "Shenandoah River Basin") ~ "Potomac-Shenandoah",
+                           Basin %in% c("Tennessee and Big Sandy River Basin" ) ~  "Tennessee",
+                           Basin %in% c("Rappahannock River Basin", "York River Basin" ) ~ "Rappahannock-York",
+                           Basin %in% c(  "Chowan and Dismal Swamp River Basin"  ) ~   "Chowan" ,
+                           TRUE ~ as.character(NA)),
+         EcoRegion = case_when(US_L3NAME %in% c("Ridge and Valley" ) ~ "Central Appalachian Ridges and Valleys",
+                               US_L3NAME %in% c("Blue Ridge" ) ~ "Blue Ridge Mountains",
+                               TRUE ~ as.character(US_L3NAME)),
+         SubBasin =  case_when(Basin_Code %in% c("James-Lower", "James-Middle", "James-Upper","Appomattox"  ) ~ "James",   
+                               Basin_Code %in% c("Roanoke", "Yadkin") ~ "Roanoke",
+                               Basin_Code %in% c( "New"  ) ~ "New",
+                               Basin_Code %in% c(  "Potomac-Lower") ~  "Potomac" ,
+                               Basin_Code%in% c("Potomac-Shenandoah") ~  "Shenandoah",
+                               Basin_Code %in% c("Rappahannock") ~ "Rappahannock",
+                               Basin_Code%in% c("York"  ) ~  "York" ,
+                               Basin_Code %in% c("Chowan-Dismal" ) ~ "Chowan",
+                               Basin_Code %in% c("Tennessee-Holston" ) ~  "Holston",
+                               Basin_Code  %in% c( "Tennessee-Clinch"  ) ~   "Clinch-Powell" ,
+                               Basin_Code  %in% c( "Tennessee-Big Sandy") ~  "Big Sandy",
+                               # hardly ever used "Cheasapeake Bay"
+                               TRUE ~ as.character(NA)),
+         BayShed = case_when(Basin %in% c("James River Basin","Potomac River Basin" , "Shenandoah River Basin",
+                                          "Rappahannock River Basin", "York River Basin") ~ "Bay",
+                             TRUE ~ as.character("NonBay")),
+         BioRegion = case_when(EcoRegion %in% c("Middle Atlantic Coastal Plain", "Southeastern Plains") ~ "Coast",
+                               EcoRegion %in% c("Piedmont", "Northern Piedmont") ~ "Piedmont",
+                               TRUE ~ as.character('Mountain')),
+         StationID_Trend = StationID,
+         Order = weightcategory,
+         AREA_SQ_MILES = totalArea_sqMile,
+         BasinSize = case_when(AREA_SQ_MILES < 1 ~ 1,
+                               between(AREA_SQ_MILES, 1, 9.99999999) ~ 2, #between is >= and <= 
+                               between(AREA_SQ_MILES, 10, 49.9999999) ~ 3, #between is >= and <= 
+                               AREA_SQ_MILES >= 50 ~ 4,
+                               TRUE ~ as.numeric(NA)),
+         StreamSizeCat = case_when(BasinSize %in% c(1,2) ~ 'Small',
+                                   BasinSize == 3 ~ "Medium",
+                                   BasinSize == 4 ~ "Large",
+                                   TRUE ~ as.character(NA))) %>% 
+  dplyr::select(DataSource:set, Basin, SubBasin, BayShed, EcoRegion, BioRegion, Order, BasinSize,
+                StreamSizeCat,AREA_SQ_MILES, DO:STXRD) %>% 
+  bind_rows(
+     filter(finalSmash, StationID %in% previousInfoMetadata$StationID) %>% 
+       left_join(previousInfoMetadata, by = 'StationID') %>% 
+       mutate(AREA_SQ_MILES = totalArea_sqMile) %>% 
+       dplyr::select(DataSource:set, Basin, SubBasin, BayShed, EcoRegion, BioRegion, Order, BasinSize,
+                     StreamSizeCat, AREA_SQ_MILES, DO:STXRD)
+     )
+
+
+names(prob2022fin)[! names(prob2022fin) %in% names(finalSmashMetadata)]
+
+```
+
+These are the data windows we are looking at for 2024 IR:
+
+* Full sample window (2001-2022)
+* 2022 IR (2017-2022)
+* 2022 IR (2015-2020)
+* 2020 IR (2013-2018)
+* 2018 IR (2011-2016)
+* 2016 IR (2009-2014)
+* 2014 IR (2007-2012)
+* 2012 IR (2005-2010)
+* 2010 IR (2003-2008)
+* 2008 IR (2001-2007)
+* Panels (Phase 1= 2001-2011; Phase 2= 2012-2022) 
+* BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020; Phase 5 = 2021-2022) makes sense with draw
+```{r}
+# IR 2022
+#* Panels (Phase 1= 2001-2010; Phase 2= 2011-2020) Kept Phase 1 same as 2018IR to balance n samples in window
+#* BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020)
+
+```
+
+
+
+```{r temporal metadata}
+finalSmashMetadata <- mutate(finalSmashMetadata,
+                            IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(NA)),
+                            IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(NA)),
+                            IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(NA)),
+                            IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(NA)),
+                            IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(NA)),
+                            IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
+                            IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
+                            IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)),
+                            IR2024 = case_when(between(Year, 2017, 2022)~ 2022, TRUE ~ as.numeric(NA)),
+                            # new IR here
+                            Panel = case_when(between(Year, 2001, 2011)~ 'Phase1',
+                                              between(Year, 2012, 2022)~ 'Phase2',
+                                              TRUE ~ as.character(NA)),
+                            BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
+                                              between(Year, 2006, 2010)~ 'Phase2',
+                                              between(Year, 2011, 2015)~ 'Phase3',
+                                              between(Year, 2016, 2020)~ 'Phase4',
+                                              between(Year, 2021, 2022)~ 'Phase5',
+                                              TRUE ~ as.character(NA)),
+                            BayPanel = paste0(BayShed, Panel),
+                            StreamSizeCatPhase = paste0(Panel,StreamSizeCat ),
+                            DataSource = "State ProbMon") %>% # change region info to State ProbMon 
+  dplyr::select(any_of(names(prob2022fin)))
+
+
+names(prob2022fin)[! names(prob2022fin) %in% names(finalSmashMetadata)]
+
+
+```
+
+
+Spatially join prob2022 to this VAHUSB dataset and 4th order watershed as well
+
+
+
+
+```{r}
+# how we made the vahusb dataset
+
+# vahusb <- st_read('C:/HardDriveBackup/GIS/Assessment/AssessmentRegions_VA84_basins.shp') %>% 
+#   group_by(VAHUSB) %>% 
+#   summarise() %>% 
+#   mutate(VAHUSB_NAME = case_when(VAHUSB == 'AO' ~ 'Atlantic Ocean Coastal',
+#                                  VAHUSB == 'AS' ~ 'Albemarle Sound',
+#                                  VAHUSB == 'BS' ~ 'Big Sandy River',
+#                                  VAHUSB == 'CB' ~ 'Chesapeake Bay/Chesapeake Bay Coastal',
+#                                  VAHUSB == 'CL' ~ 'Chowan River, Lower',
+#                                  VAHUSB == 'CM' ~ 'Chowan River-Meherrin River',
+#                                  VAHUSB == 'CU' ~ 'Chowan River, Upper',
+#                                  VAHUSB == 'JA' ~ 'James River- Appomattox River',
+#                                  VAHUSB == 'JL' ~ 'James River, Lower (Tidal)',
+#                                  VAHUSB == 'JM' ~ 'James River, Middle (Piedmont)',
+#                                  VAHUSB == 'JR' ~ 'James River- Rivanna River',
+#                                  VAHUSB == 'JU' ~ 'James River, Upper (Mountain)',
+#                                  VAHUSB == 'NE' ~ 'New River',
+#                                  VAHUSB == 'PL' ~ 'Potomac River, Lower',
+#                                  VAHUSB == 'PS' ~ 'Potomac River-Shenandoah River',
+#                                  VAHUSB == 'PU' ~ 'Potomac River, Upper',
+#                                  VAHUSB == 'RA' ~ 'Rappahannock River',
+#                                  VAHUSB == 'RD' ~ 'Roanoke River- Dan River',
+#                                  VAHUSB == 'RL' ~ 'Roanoke River, Lower',
+#                                  VAHUSB == 'RU' ~ 'Roanoke River, Upper',
+#                                  VAHUSB == 'TC' ~ 'Tennessee-Clinch River',
+#                                  VAHUSB == 'TH' ~ 'Tennessee-Holston River',
+#                                  VAHUSB == 'TP' ~ 'Tennessee-Powell River',
+#                                  VAHUSB == 'YA' ~ 'Yadkin River-Ararat River',
+#                                  VAHUSB == 'YO' ~ 'York River',
+#                                  TRUE ~ as.character(NA)))
+# 
+# View(vahusb %>% st_drop_geometry())
+# 
+# #st_write(vahusb, 'C:/HardDriveBackup/GIS/Assessment/VAHUSB.shp')
+``` 
+
+```{r new basin analyses}
+library(sf)
+
+
+vahusb <- st_read('C:/HardDriveBackup/GIS/Assessment/VAHUSB.shp') %>% 
+  rename(VAHUSB_NAME = VAHUSB_)
+#wshd4Order <- st_read("C:/HardDriveBackup/GIS/GIS_BaseLayer_Datasets.gdb",'VA_SUBBASINS_4TH_ORDER_STG')
+
+finalSmashMetadatasf <- finalSmashMetadata %>% 
+    st_as_sf(coords = c("LongitudeDD", "LatitudeDD"), 
+               remove = F, # don't remove these lat/lon cols from df
+               crs = 4326) %>% # add projection, needs to be geographic for now bc entering lat/lng
+  st_intersection(vahusb) 
+
+
+# after careful review, this step was dropped because a station was lost in this intersection and the n in each category didn't prove useful for further analysis
+#%>% 
+  #st_intersection(dplyr::select(wshd4Order, Basin4thOrder = NAME)) 
+
+
+prob2024fin <- finalSmashMetadatasf %>% 
+  dplyr::select(DataSource:SubBasin, VAHUSB, VAHUSB_NAME,# Basin4thOrder, 
+                BayShed:STXRD) %>% 
+  # sf doesn't like modern names in this version of R
+  rename('Ortho-P' = 'Ortho.P',
+         'Hg-C' = 'Hg.C', 
+         '70331VFine' = 'X70331VFine') %>% 
+  arrange(Year, StationID) %>% 
+  st_drop_geometry()
+```
+
+
+## Smash old and new data
+
+```{r old and new}
+prob2024 <- bind_rows(prob2022fin, prob2024fin ) %>% 
+  # fix station field
+  mutate(station = 1:n()) %>% 
+  arrange(Year, StationID)
+```
+
+
+Remove the 1's in the IR columns and IR years for full dataset
+
+```{r}
+prob2024fin <- prob2024 %>% 
+  mutate(IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(NA)),
+         IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(NA)),
+         IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(NA)),
+         IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(NA)),
+         IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(NA)),
+         IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
+         IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
+         IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)),
+         IR2024 = case_when(between(Year, 2017, 2022)~ 2024, TRUE ~ as.numeric(NA)),
+
+         # and fix some basin size mislabels in previous data
+          BasinSize = case_when(AREA_SQ_MILES < 1 ~ 1,
+                               between(AREA_SQ_MILES, 1, 9.99999999) ~ 2, #between is >= and <= 
+                               between(AREA_SQ_MILES, 10, 49.9999999) ~ 3, #between is >= and <= 
+                               AREA_SQ_MILES >= 50 ~ 4,
+                               TRUE ~ as.numeric(NA)),
+         StreamSizeCat = case_when(BasinSize %in% c(1,2) ~ 'Small',
+                                   BasinSize == 3 ~ "Medium",
+                                   BasinSize == 4 ~ "Large",
+                                   TRUE ~ as.character(NA)),
+                            Panel = case_when(between(Year, 2001, 2011)~ 'Phase1',
+                                              between(Year, 2012, 2022)~ 'Phase2',
+                                              TRUE ~ as.character(NA)),
+                            BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
+                                              between(Year, 2006, 2010)~ 'Phase2',
+                                              between(Year, 2011, 2015)~ 'Phase3',
+                                              between(Year, 2016, 2020)~ 'Phase4',
+                                              between(Year, 2021, 2022)~ 'Phase5',
+
+                                              TRUE ~ as.character(NA)),
+                            BayPanel = paste0(BayShed, Panel),
+                            StreamSizeCatPhase = paste0(Panel,StreamSizeCat )
+         )
+```
+
+
+
+
+
+```{r save data for review}
+write.csv(prob2024fin, 'processedData/Wadeable_ProbMon_2001-2022.csv', row.names = F, na  ='')
+
+write.csv(prob2024fin %>% 
+  group_by(Basin) %>% 
+  count(), 'processedData/summaries/BasinSummary.csv', row.names = F, na  ='')
+
+
+write.csv(prob2024fin %>% 
+  group_by(SubBasin) %>% 
+  count, 'processedData/summaries/SubBasinSummary.csv', row.names = F, na  ='')
+
+write.csv(prob2024fin %>% 
+  group_by(VAHUSB) %>% 
+  count(), 'processedData/summaries/VAHUSBSummary.csv', row.names = F, na  ='')
+
+# write.csv(prob2024fin %>% 
+#   group_by(Basin4thOrder) %>% 
+#   count(), 'processedData/summaries/Basin4OrderSummary.csv', row.names = F, na  ='')
+```
+
+
+
+
+
+
+# Design Status update
 

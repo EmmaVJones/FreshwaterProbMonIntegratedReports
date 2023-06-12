@@ -1,0 +1,271 @@
+---
+title: "Backfill year information into Design Status"
+author: "Emma Jones"
+date: "5/23/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+```
+
+## Background
+
+This script outlines efforts to match year information to each record in the "design status" spreadsheet. The design status spreadsheet details all of the sites drawn since 2001 for Virginia and whether or not the site was sampled, as well as why it wasn't sampled. Prior to ~2019, the year relating to a site was only transferred for sampled sites, so there can be gaps in certain analyses that need to be conducted over all drawn sites (e.g. how many sites evaluated in a given IR window or how permission denied rates have evolved since the program began). This document overviews efforts to backtrack and trace down this information, beginning with the IR2022 design status spreadsheet.
+
+Sites have been drawn across Virginia in 5 year blocks. This information was from Jason and is in  C:/HardDriveBackup/ProbMon/PanelInformation
+
+
+## IR2022 design status
+
+Bring in the dataset we are trying to complete and filter to just the sites we need more metadata on.
+
+```{r design status}
+sitesOriginal <- read_csv('originalData/designStatusIR2022.csv') 
+sitesFine <- sitesOriginal %>% 
+  filter(!is.na(Year))
+sitesNotFine <- sitesOriginal %>% 
+  filter(is.na(Year))
+
+#QA
+nrow(sitesFine)+nrow(sitesNotFine)== nrow(sitesOriginal)
+```
+
+
+## Panel 1 data smash
+
+Bring in the first phase of sites (2001-2005) and join to missing sites.
+
+```{r phase 1}
+phase1 <- read_excel('C:/HardDriveBackup/ProbMon/PanelInformation/ProbMonPhase1.XLS',
+                     sheet = 'Sheet1-fromTONY!') %>% 
+  mutate(Year = paste0(200, `Design Year`))
+
+# join on lat/lng
+phase1fix <- sitesNotFine %>% 
+  inner_join(select(phase1, Station_Id, Latitude = LatDD, Longitude = NegLonDD, Year), 
+             by = c('Longitude-DD' = 'Longitude',
+                    "Latitude-DD" = "Latitude")) %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select(sampleID, Station_Id, everything(), -Year.y) 
+  
+```
+
+Fix these in the original dataset
+
+```{r phase1 fix}
+sitesFixed1 <- sitesNotFine %>% 
+  left_join(dplyr::select(phase1fix, sampleID, Station_Id, Year),
+            by = 'sampleID') %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select( -Year.y) %>% 
+  filter(!is.na(Year)) %>% 
+  mutate(Year = as.numeric(Year))
+  
+# drop sites that are fixed
+sitesNotFine <- filter(sitesNotFine, ! sampleID %in% sitesFixed1$sampleID)
+```
+
+
+
+
+## Panel 2 data smash
+
+Bring in the second phase of sites (2006-2010) and join to missing sites.
+
+```{r phase 1}
+phase2 <- read_excel('C:/HardDriveBackup/ProbMon/PanelInformation/ProbMonPhase2.xls',
+                     sheet = 'Tony Original') %>% 
+  mutate(Year = case_when(panel == 'PanelOne' ~ 2006,
+                          panel == 'PanelTwo' ~ 2007,
+                          panel == 'PanelThree' ~ 2008,
+                          panel == 'PanelFour' ~ 2009,
+                          panel == 'PanelFive' ~ 2010)) %>% 
+  #oversample fix
+  mutate(Year = ifelse(!is.na(`...18` ), `...18`, Year))
+
+# join on lat/lng
+phase2fix <- sitesNotFine %>% 
+  # couldn't join just on DD so had to make rounding joins
+  mutate(`Longitude-DD` = signif(`Longitude-DD`, digits = 4),
+         `Latitude-DD` = signif(`Latitude-DD`, digits = 4)) %>% 
+  inner_join(phase2 %>% 
+                mutate(`LongDD-nad27` = signif(`LongDD-nad27`, digits = 4),
+                       `LatDD-nad27` = signif(`LatDD-nad27`, digits = 4)) %>% 
+               select(Station_Id = siteID, Latitude = `LatDD-nad27`, Longitude = `LongDD-nad27`, Year) , 
+             by = c('Longitude-DD' = 'Longitude',
+                    "Latitude-DD" = "Latitude")) %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select(sampleID, Station_Id, everything(), -Year.y) 
+
+# these two are oversamples that did not get a year attributed above. The years assigned were figured out by looking deep in the oversample sheet (n =350)
+# dividing by 5 (70 oversamples per year) and adding ayear to each sample 
+
+phase2fix <- mutate(phase2fix, Year = case_when(Station_Id == 'VAW05547-627' ~ 2009,
+                                                Station_Id == 'VAW05547-674' ~ 2010,
+                                                TRUE ~ Year))
+  
+```
+
+Fix these in the original dataset
+
+```{r phase2 fix}
+sitesFixed2 <- sitesNotFine %>% 
+  left_join(dplyr::select(phase2fix, sampleID, Station_Id, Year),
+            by = 'sampleID') %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select( -Year.y) %>% 
+  filter(!is.na(Year)) %>% 
+  mutate(Year = as.numeric(Year))
+  
+# drop sites that are fixed
+sitesNotFine <- filter(sitesNotFine, ! sampleID %in% sitesFixed2$sampleID)
+```
+
+
+## Panel 3 data smash
+
+Bring in the third phase of sites (2011-2015) and join to missing sites.
+
+```{r phase 3}
+phase3 <- read_excel('C:/HardDriveBackup/ProbMon/PanelInformation/FPM_Sites_Final_Phase3.xls',
+                     sheet = 'Statewide_All') %>% 
+  mutate(Year = case_when(PANEL =='Yr_2011' ~ 2011,
+                          PANEL =='Yr_2012' ~ 2012,
+                          PANEL =='Yr_2013' ~ 2013,
+                          PANEL =='Yr_2014' ~ 2014,
+                          PANEL =='Yr_2015' ~ 2015))
+
+# join on lat/lng
+phase3fix <- sitesNotFine %>% 
+  inner_join(select(phase3, Station_Id = SITEID, Latitude = `LAT_DD`, Longitude = `LONG_DD`, Year), 
+             by = c('Longitude-DD' = 'Longitude',
+                    "Latitude-DD" = "Latitude")) %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select(sampleID, Station_Id, Year, everything(), -Year.y) %>% 
+  # basic context clues
+  mutate(Year = case_when(sampleID %in% c("2-JKS028.69_2015", "9-NEW070.80_2015") ~ 2015,
+                          sampleID %in% c("5ANTW066.95_2016") ~ 2016,
+                          sampleID %in% c("6ARLF000.06_2018", "5ANTW066.95_2018",
+                                          "1BNTH015.45_2018", "4ASRE006.91_2018") ~ 2018,
+                          TRUE ~ Year)) %>% 
+  # Extra context clues- comparing fish EDAS, CEDS, Jason's brain
+  mutate(Year = case_when(sampleID %in% c("8-MPN075.84a","4ASRE006.91a") ~ 2011,
+                          sampleID %in% c( "1BNTH015.45a", "VARS11-022", "VARS11-029") ~ 2012,
+                          sampleID %in% c("8-MPN075.84b", "9-NEW070.80",'2-JKS028.69') ~ 2013,
+                          sampleID %in% c( "1BNTH015.45b", "4ASRE006.91b", "1BNTH015.66",
+                                           "5ANTW066.95") ~ 2014,
+                          sampleID %in% c("2015NT1", "2015NT2", "2015NT3") ~ 2015,
+                          sampleID %in% c("4ASRE006.91c", "1BNTH015.45b") ~ 2016,
+                          TRUE ~ Year)) %>% 
+  mutate(Year = ifelse(is.na(Year), 'phase3 check', Year))
+  
+```
+
+Fix these in the original dataset
+
+```{r phase1 fix}
+sitesFixed3 <- sitesNotFine %>% 
+  left_join(dplyr::select(phase3fix, sampleID, Station_Id, Year),
+            by = 'sampleID') %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select( -Year.y) %>% 
+  filter(!is.na(Year)) %>% 
+  mutate(Year = as.numeric(Year))
+  
+# drop sites that are fixed
+sitesNotFine <- filter(sitesNotFine, ! sampleID %in% sitesFixed3$sampleID)
+```
+
+
+
+## Panel 4 data smash
+
+Bring in the fourth phase of sites (2016-2020) and join to missing sites.
+
+```{r phase 4}
+phase4 <- read_excel('C:/HardDriveBackup/ProbMon/PanelInformation/ProbMon20162020_Final.xlsx',
+                     sheet = 'PrimarySamplesSites') %>% 
+  mutate(Year = case_when(panel =='Base_2016' ~ 2016,
+                          panel =='OverSamp_2016' ~ 2016,
+                          panel =='Base_2017' ~ 2017,
+                          panel =='OverSamp_2017' ~ 2017,
+                          panel =='Base_2018' ~ 2018,
+                          panel =='OverSamp_2018' ~ 2018,
+                          panel =='Base_2019' ~ 2019,
+                          panel =='OverSamp_2019' ~ 2019,
+                          panel =='Base_2020' ~ 2020,
+                          panel =='OverSamp_2020' ~ 2020))
+
+# join on lat/lng
+phase4fix <- sitesNotFine %>% 
+  inner_join(select(phase4, Station_Id = siteID, Latitude = LATDD_GRS, Longitude = LONDD_GRS, Year), 
+             by = c('Longitude-DD' = 'Longitude',
+                    "Latitude-DD" = "Latitude")) %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select(sampleID, Station_Id, everything(), -Year.y) 
+  
+```
+
+Fix these in the original dataset
+
+```{r phase1 fix}
+sitesFixed4 <- sitesNotFine %>% 
+  left_join(dplyr::select(phase4fix, sampleID, Station_Id, Year),
+            by = 'sampleID') %>% 
+  mutate(Year.x = Year.y) %>%
+  rename(Year = Year.x) %>% 
+  dplyr::select( -Year.y) %>% 
+  filter(!is.na(Year)) %>% 
+  mutate(Year = as.numeric(Year))
+  
+# drop sites that are fixed
+sitesNotFine <- filter(sitesNotFine, ! sampleID %in% sitesFixed4$sampleID) %>% 
+  # Extra context clues- comparing fish EDAS, CEDS, Jason's brain
+  mutate(Year = case_when(sampleID %in% c( "2-JKS028.69b") ~ 2015,
+                          sampleID %in% c("8-MPN075.84c") ~ 2017,
+                          TRUE ~ Year)) 
+```
+
+
+
+
+
+## Fixed sites
+
+Smash together everything with a year
+
+```{r}
+sites_fixed <- bind_rows(sitesFixed1, sitesFixed2, sitesFixed3, sitesFixed4, sitesNotFine) %>% 
+  arrange(Year)
+
+```
+
+Now smash back together
+
+```{r}
+sitesFinal <- sitesFine %>% 
+  bind_rows(sites_fixed) %>% 
+  arrange(Year)
+
+
+#QA
+nrow(sitesFinal)== nrow(sitesOriginal)
+```
+
+Save work
+
+```{r}
+
+write.csv(sitesFinal, 'originalData/designStatusIR2022_EVJyearFixes.csv', na= '', row.names = F)
+```
+
