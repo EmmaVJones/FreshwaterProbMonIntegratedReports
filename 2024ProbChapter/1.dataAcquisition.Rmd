@@ -785,6 +785,26 @@ prob2022 <- read.csv('processedData/prob2022PoFix.csv') %>%
          '70331VFine' = 'X70331VFine')
 ```
 
+And the Jackson river site has issues. 2-JKS070.97
+
+```{r}
+prob2022 <- mutate(prob2022, StationID = case_when(StationID == '2-JKS070.97' ~ '2-JKS063.03',
+                                                         TRUE ~ as.character(StationID)),
+                      StationID_Trend = case_when(StationID_Trend == '2-JKS070.97' ~ '2-JKS063.03',
+                                                         TRUE ~ as.character(StationID_Trend))) 
+# fix landcover
+prob2022Fine <- filter(prob2022, StationID != '2-JKS063.03')
+prob2022Fix <- filter(prob2022, StationID == '2-JKS063.03') %>% 
+  dplyr::select(DataSource:`Hg-C`) %>% 
+  left_join(read.csv('C:/HardDriveBackup/R/GitHub/LandcoverAnalysis/Results/ProbWadeableAreaFixesLandcoverRerun/JacksonFix/Result10.csv'),
+                     by = 'StationID')
+
+prob2022 <- bind_rows(prob2022Fine, prob2022Fix) %>% 
+  arrange(Year, StationID)
+rm(prob2022Fine, prob2022Fix)
+```
+
+
 
 Bring in Field, Analyte, and Metals Data
 
@@ -1094,9 +1114,9 @@ names(prob2022fin) == names(prob2024fin)
 
 ```{r old and new}
 prob2024 <- bind_rows(prob2022fin, prob2024fin ) %>% 
+    arrange(Year, StationID) %>% 
   # fix station field
-  mutate(station = 1:n()) %>% 
-  arrange(Year, StationID)
+  mutate(station = 1:n()) 
 ```
 
 
@@ -1139,6 +1159,27 @@ prob2024fin <- prob2024 %>%
          )
 ```
 
+
+# Fix Lat/Lng
+
+There are a number of trend sites taht have different lat/lng depending on the year. We will join the CEDS coordinates and be done with that issue.
+
+
+
+
+```{r}
+multiStationGIS_ViewAll <-  pool %>% tbl(in_schema("wqm",  "Wqm_Sta_GIS_View")) %>%
+  filter(Station_Id %in% !! toupper(prob2024fin$StationID)) %>%
+  as_tibble() %>% 
+  dplyr::select(Station_Id, Latitude,Longitude)
+
+prob2024fin2 <- left_join(prob2024fin, multiStationGIS_ViewAll, by = c('StationID' = 'Station_Id')) %>% 
+  mutate(LatitudeDD = Latitude,
+         LongitudeDD = Longitude) %>% 
+  dplyr::select(-c(Latitude, Longitude))
+  
+names(prob2024fin2) ==names(prob2024fin)
+```
 
 
 
