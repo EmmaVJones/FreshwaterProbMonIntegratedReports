@@ -52,12 +52,12 @@ pool <- dbPool(
 
 Below is the final dataset for the 2022 IR that we will aim to match for 2024 IR.
 
-This version (_EVJ) was used because it includes the transition of the NRO site naming issue 1AQUA004.14 to 1AQUA004.35. The original data published online for IR2022 is still available in 'originalData/originalOriginal/Wadeable_ProbMon_2001-2020.csv' but this version represents the best data to move forward with for IR2024. Since Lucy is awesome, she combined these data in previous reports and kept the ProbMon name 1AQUA004.14 to represent the station. Emma updated that station in the _EVJ spreadsheet on 2/6/2023 so when carried forward, this station will me known as 1AQUA004.35.
+This version (_EVJ_fixedAreaAndUpdatedPopulation) was used because it includes the transition of the NRO site naming issue 1AQUA004.14 to 1AQUA004.35. It also contains the fixed landcover metrics where watershed areas were incorrect, rerun 2019-2020 landcover data with NLCD2019, and population metrics based off 2020 census for all sites. This work is documented in `C:\HardDriveBackup\R\GitHub\LandcoverAnalysis/2023watershedQAwork.Rmd`. The original data published online for IR2022 is still available in 'originalData/originalOriginal/Wadeable_ProbMon_2001-2020.csv' but this version represents the best data to move forward with for IR2024. Since Lucy is awesome, she combined these data in previous reports and kept the ProbMon name 1AQUA004.14 to represent the station. Emma updated that station in the _EVJ spreadsheet on 2/6/2023 so when carried forward, this station will me known as 1AQUA004.35.
 
 ```{r prob 2022}
-prob2022 <- read_csv('originalData/Wadeable_ProbMon_2001-2020_EVJ.csv') %>% 
-  rename(`Ortho-P` = 'Ortho.P',
-         'Hg-C' = 'Hg.C', 
+prob2022 <- read_csv('originalData/Wadeable_ProbMon_2001-2020_EVJ_fixedAreaAndUpdatedPopulation.csv') %>% 
+  rename(`Ortho-P` = 'Ortho P',
+         'Hg-C' = 'Hg C', 
          '70331VFine' = 'X70331VFine')
 ```
 
@@ -485,8 +485,6 @@ IR2024bioassessment <- pin_get("ejones/CurrentIRbioassessmentDecisions", board =
 benSamps_Filter_finDecision <- left_join(benSamps_Filter_fin, dplyr::select(IR2024bioassessment, StationID, AssessmentMethod)) %>% 
   mutate(AssessmentMethod = case_when(StationID == '2-MTC006.95' ~ 'VSCI', 
                                       # pin_get("ejones/PreviousIRbioassessmentDecisions", board = "rsconnect") all other 2-MTC stations use VSCI when Mike assessed
-                                      # fix George's that haven't been bioassessed yet
-                                      is.na(AssessmentMethod) & `Collected By` %in% c('GEORGEJ DEVLIN', 'LucyK Baker') ~ 'VSCI',
                                       TRUE ~ AssessmentMethod ))
 
 # after speaking with PRO and NRO regional bios, the following SCI overrides are suggested
@@ -751,7 +749,7 @@ summarise_at(vars(c(`SCI Score`, `Family Total Taxa`:`Fam %MFBI Score`)), mean, 
 
 rm(po); rm(poMetrics)
 # clean up workspace
-rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab); rm(ecoregion)
+rm(probRatio); rm(SCIfinal); rm(bugAvg); rm(SCImetrics); rm(totHab)
 
 ```
 
@@ -1087,6 +1085,8 @@ prob2024fin <- finalSmashMetadatasf %>%
          '70331VFine' = 'X70331VFine') %>% 
   arrange(Year, StationID) %>% 
   st_drop_geometry()
+
+names(prob2022fin) == names(prob2024fin)
 ```
 
 
@@ -1146,18 +1146,18 @@ prob2024fin <- prob2024 %>%
 ```{r save data for review}
 write.csv(prob2024fin, 'processedData/Wadeable_ProbMon_2001-2022.csv', row.names = F, na  ='')
 
-write.csv(prob2024fin %>% 
-  group_by(Basin) %>% 
-  count(), 'processedData/summaries/BasinSummary.csv', row.names = F, na  ='')
-
-
-write.csv(prob2024fin %>% 
-  group_by(SubBasin) %>% 
-  count, 'processedData/summaries/SubBasinSummary.csv', row.names = F, na  ='')
-
-write.csv(prob2024fin %>% 
-  group_by(VAHUSB) %>% 
-  count(), 'processedData/summaries/VAHUSBSummary.csv', row.names = F, na  ='')
+# write.csv(prob2024fin %>% 
+#   group_by(Basin) %>% 
+#   count(), 'processedData/summaries/BasinSummary.csv', row.names = F, na  ='')
+# 
+# 
+# write.csv(prob2024fin %>% 
+#   group_by(SubBasin) %>% 
+#   count, 'processedData/summaries/SubBasinSummary.csv', row.names = F, na  ='')
+# 
+# write.csv(prob2024fin %>% 
+#   group_by(VAHUSB) %>% 
+#   count(), 'processedData/summaries/VAHUSBSummary.csv', row.names = F, na  ='')
 
 # write.csv(prob2024fin %>% 
 #   group_by(Basin4thOrder) %>% 
