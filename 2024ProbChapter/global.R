@@ -2,27 +2,26 @@
 
 
 # Presets for easier reports year to year
-IRyear <- '2022'
-IRyearWindowBegin <- '2015'
-IRyearWindowEnd <- '2020'
-IRrange <- '2015 - 2020'
+IRyear <- '2024'
+IRyearWindowBegin <- '2017'
+IRyearWindowEnd <- '2022'
+IRrange <- '2017 - 2022'
 
 
 
 
 
 dat <- read.csv('processedData/allCDF.csv')# CDF results
-surveyData <- read_csv('processedData/Wadeable_ProbMon_2001-2020.csv') %>%
+surveyData <- read_csv('processedData/Wadeable_ProbMon_2001-2022.csv') %>%
   select(StationID_Trend,Year,DO:MetalCCU,CALCIUM:MERCURY,wshdImpPCT) %>% 
-  dplyr::rename(siteID=StationID_Trend,Ortho_P= "Ortho.P")#,
-                #X70331VFine=`70331VFine`)
-designStatus <- read_csv('processedData/designStatusIR2022.csv') %>%
+  dplyr::rename(siteID=StationID_Trend,Ortho_P= "Ortho-P")
+designStatus <- read_csv('processedData/designStatusIR2024.csv') %>%
   dplyr::rename(siteID=sampleID ) # start playing nicely with spsurvey)
 
 
 
 # Bring in relative risk data
-rr <- read.csv('processedData/relriskIR2022.csv') %>%
+rr <- read.csv('processedData/relriskIR2024.csv') %>%
   mutate(Stressor=dplyr::recode(Stressor,"TotHabstatus"="Habitat Disturbance",
                                 "TDSstatus"='Ionic Strength',
                                 "TNstatus"='Total Nitrogen',
@@ -164,7 +163,7 @@ statslookup <- function(indicator,measure,category,revOrder){
 
 
 # DO DATA
-DO <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'DO') %>%
+DO <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'DO') %>%
   select(Value, Estimate.P, StdError.P)
 totalsDO <- data.frame(Condition=c('Suboptimal'),
                        pct = vlookup(4,DO,2,TRUE),
@@ -180,7 +179,7 @@ colnames(DOsummary)<-c('Parameter','Below Standard ( 4 mg/L )')
 
 
 # PH DATA
-pH <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'pH') %>%
+pH <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'pH') %>%
   select(Value, Estimate.P, StdError.P)
 totalspH <- data.frame(Condition=c('Suboptimal'),
                        pct = vlookup(6,pH,2,TRUE),
@@ -202,7 +201,7 @@ colnames(pHsummary)<-c('Parameter','Below Standard (pH 6)','Above Standard (pH 9
 
 
 # HABITAT DATA
-hab <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'TotHab') %>%
+hab <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'TotHab') %>%
   select(Value,Estimate.P,StdError.P, NResp)
 totalshab <- data.frame(Condition = c('Suboptimal','Fair','Optimal'),
                         pct = c(vlookup(120,hab,2,TRUE), #suboptimal
@@ -227,7 +226,7 @@ totalshabsuboptimal <- data.frame(Condition=c('Suboptimal'),
 
 
 # LRBS DATA
-LRBS <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'LRBS') %>%
+LRBS <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'LRBS') %>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsLRBS <- data.frame(Condition=c('Suboptimal','Fair','Optimal'),
                          pct= c(vlookup(-1,LRBS,2,TRUE), #suboptimal
@@ -256,7 +255,7 @@ totalsLRBSsuboptimal <- data.frame(Condition = c('Suboptimal'),
 
 
 #TN DATA
-TN <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'TN') %>%
+TN <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'TN') %>%
   select(Value,Estimate.P, StdError.P, NResp)
 totalsTN <- data.frame(Condition = c('Suboptimal','Fair','Optimal'),
                        pct = c(100-vlookup(2,TN,2,TRUE),#suboptimal
@@ -279,7 +278,7 @@ totalsTNsuboptimal <- data.frame(Condition = c('Suboptimal'),
   mutate(Parameter='Total Nitrogen')%>%select(Parameter,everything())
 
 #TP DATA
-TP <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'TP') %>%
+TP <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'TP') %>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsTP <- data.frame(Condition = c('Suboptimal','Fair','Optimal'),
                        pct = c(100-vlookup(0.05,TP,2,TRUE),#suboptimal
@@ -302,7 +301,7 @@ totalsTPsuboptimal <- data.frame(Condition = c('Suboptimal'),
   mutate(Parameter='Total Phosphorus')%>%select(Parameter,everything())
 
 # TDS DATA
-TDS <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'TDS') %>%
+TDS <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'TDS') %>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsTDS <- data.frame(Condition = c('Suboptimal','Fair','Optimal'),
                         pct = c(100-vlookup(350,TDS,2,TRUE),#suboptimal
@@ -326,7 +325,7 @@ totalsTDSsuboptimal <- data.frame(Condition = c('Suboptimal'),
   select(Parameter, everything())
 
 # METALS CCU DATA
-mCCU <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'MetalCCU') %>%
+mCCU <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'MetalCCU') %>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsmCCU <- data.frame(Condition = c('Suboptimal','Fair','Optimal'),
                          pct = c(100-vlookup(2,mCCU,2,TRUE),#suboptimal
@@ -351,7 +350,7 @@ totalsmCCUsuboptimal <- data.frame(Condition = c('Suboptimal'),
 
 
 # VSCI DATA
-VSCI <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'VSCIVCPMI')%>%
+VSCI <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'VSCIVCPMI')%>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsVSCI <- data.frame(Condition = c('Suboptimal'),
                          pct = vlookup(60,VSCI,2,TRUE),
@@ -363,7 +362,7 @@ totalsVSCI <- data.frame(Condition = c('Suboptimal'),
 
 
 # DNickel DATA
-Nickel <- filter(dat, Subpopulation == 'IR2022' & Indicator == 'NICKEL') %>%
+Nickel <- filter(dat, Subpopulation == 'IR2024' & Indicator == 'NICKEL') %>%
   select(Value, Estimate.P, StdError.P, NResp)
 totalsNickel <- data.frame(Condition = c('Suboptimal'),
                            pct = vlookup(0.03,Nickel,2,TRUE),
@@ -404,7 +403,7 @@ togetherstackedflip$Parameter <- factor(togetherstackedflip$Parameter,
 
 
 # RELATIVE RISK PLOT
-rr <- read.csv('processedData/relriskIR2022.csv') %>%
+rr <- read.csv('processedData/relriskIR2024.csv') %>%
   mutate(Stressor=dplyr::recode(Stressor,"TotHabstatus"="Habitat Disturbance",
                                 "TDSstatus"='Ionic Strength',
                                 "TNstatus"='Total Nitrogen',

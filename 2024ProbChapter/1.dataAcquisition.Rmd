@@ -991,8 +991,9 @@ These are the data windows we are looking at for 2024 IR:
 * 2008 IR (2001-2007)
 * Panels (Phase 1= 2001-2011; Phase 2= 2012-2022) 
 * BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020; Phase 5 = 2021-2022) makes sense with draw
+
 ```{r}
-# IR 2022
+# IR 2022 breakdown
 #* Panels (Phase 1= 2001-2010; Phase 2= 2011-2020) Kept Phase 1 same as 2018IR to balance n samples in window
 #* BioPanels (Phase 1 = 2001-2005; Phase 2 = 2006-2010; Phase 3 = 2011-2015; Phase 4 = 2016-2020)
 
@@ -1171,14 +1172,35 @@ There are a number of trend sites taht have different lat/lng depending on the y
 multiStationGIS_ViewAll <-  pool %>% tbl(in_schema("wqm",  "Wqm_Sta_GIS_View")) %>%
   filter(Station_Id %in% !! toupper(prob2024fin$StationID)) %>%
   as_tibble() %>% 
-  dplyr::select(Station_Id, Latitude,Longitude)
+  dplyr::select(Station_Id, Longitude, Latitude)
+
+sitesNotInCEDS <- tribble(
+  ~StationID,  ~Longitude, ~Latitude,
+  '5ANTW045.12',	-77.190038, 	36.866562,
+  '6CSLM002.11',	-81.407864,	36.809949,
+  '2-RVN035.67',	-78.4155,	38.008844,
+  '2-STH000.50',	-79.378135,	37.773018,
+  '2-WLN006.90',	-79.80374,	37.897411,
+  '3-MTN003.31',	-77.796595,	38.455726,
+  '9-ELK013.81',	-81.164599,	36.710784,
+  '9-LFK005.39',	-81.171301,	37.243087,
+  '4AXUY000.58', -78.8769987,	36.64839836,
+  '4AROC010.68',	-78.56410796,	37.1086978,
+  '9-BST069.21',	-81.28267087,	37.2601764)
+
+multiStationGIS_ViewAll <- bind_rows(multiStationGIS_ViewAll, sitesNotInCEDS)
 
 prob2024fin2 <- left_join(prob2024fin, multiStationGIS_ViewAll, by = c('StationID' = 'Station_Id')) %>% 
   mutate(LatitudeDD = Latitude,
          LongitudeDD = Longitude) %>% 
-  dplyr::select(-c(Latitude, Longitude))
+  dplyr::select(-c(Latitude, Longitude)) %>% 
+  # fix known issues
+  m
   
 names(prob2024fin2) ==names(prob2024fin)
+
+
+prob2024fin <- prob2024fin2
 ```
 
 
@@ -1200,6 +1222,11 @@ write.csv(prob2024fin, 'processedData/Wadeable_ProbMon_2001-2022.csv', row.names
 #   group_by(VAHUSB) %>% 
 #   count(), 'processedData/summaries/VAHUSBSummary.csv', row.names = F, na  ='')
 
+# prob2024fin %>% 
+#   group_by(VAHUSB) %>% 
+#   count() %>% 
+#   arrange(desc(n)) %>% View() # this is helpful to update which subbasins we want to run populations estimates on. we want about 30 sites before we run these. Check in CDFanalysis.R to make sure all populations with that criteria are being analyzed
+
 # write.csv(prob2024fin %>% 
 #   group_by(Basin4thOrder) %>% 
 #   count(), 'processedData/summaries/Basin4OrderSummary.csv', row.names = F, na  ='')
@@ -1210,5 +1237,111 @@ write.csv(prob2024fin, 'processedData/Wadeable_ProbMon_2001-2022.csv', row.names
 
 
 
+
+
+
 # Design Status update
 
+We also want to add back in the full design status sites for an updated design status dataset.
+
+Note the sampleID field uses the StationID_Trend information to ensure each station has a unique name for CDF analysis purposes. 
+
+We also need to update the design status window information to match the new window breakdowns.
+
+**Make sure you have each weight as the original design weight in this spreadsheet. Subsquent steps in CDFanalysis.R recalculate the weight according to numerous window scenarios based on the original weight (and handle all trend weight adjustments).**
+
+`1`="3790.5165999999999",  
+`2`="947.62919999999997",
+`3`="541.50239999999997",
+`4`="315.87639999999999", 
+`5`="140.3895", 
+`6`="140.3895"
+
+```{r}
+designStatusOld <- read.csv('originalData/designStatusIR2022_EVJyearFixes.csv') %>% 
+  mutate(Station_Id = as.character(Station_Id),
+         Station_Id = na_if(Station_Id, "")) %>%  
+  left_join(dplyr::select(prob2024fin, StationID_Trend, AREA_SQ_MILES),
+            by = c('sampleID' = 'StationID_Trend')) %>% 
+  mutate(IR2008 = case_when(between(Year, 2001, 2007)~ 2008, TRUE ~ as.numeric(NA)),
+         IR2010 = case_when(between(Year, 2003, 2008)~ 2010, TRUE ~ as.numeric(NA)),
+         IR2012 = case_when(between(Year, 2005, 2010)~ 2012, TRUE ~ as.numeric(NA)),
+         IR2014 = case_when(between(Year, 2007, 2012)~ 2014, TRUE ~ as.numeric(NA)),
+         IR2016 = case_when(between(Year, 2009, 2014)~ 2016, TRUE ~ as.numeric(NA)),
+         IR2018 = case_when(between(Year, 2011, 2016)~ 2018, TRUE ~ as.numeric(NA)),
+         IR2020 = case_when(between(Year, 2013, 2018)~ 2020, TRUE ~ as.numeric(NA)),
+         IR2022 = case_when(between(Year, 2015, 2020)~ 2022, TRUE ~ as.numeric(NA)),
+         # new IR here
+         IR2024 = case_when(between(Year, 2017, 2022) ~ 2024, TRUE ~ as.numeric(NA)), 
+         Panel = case_when(between(Year, 2001, 2011)~ 'Phase1',
+                           between(Year, 2012, 2022)~ 'Phase2',
+                           TRUE ~ as.character(NA)),
+         BioPanel = case_when(between(Year, 2001, 2005)~ 'Phase1',
+                              between(Year, 2006, 2010)~ 'Phase2',
+                              between(Year, 2011, 2015)~ 'Phase3',
+                              between(Year, 2016, 2020)~ 'Phase4',
+                              between(Year, 2021, 2022)~ 'Phase5',
+                              TRUE ~ as.character(NA)),
+         BayPanel = paste0(BayShed, Panel),
+         StreamSizeCat = case_when(BasinSize %in% c(1,2) ~ 'Small',
+                                   BasinSize == 3 ~ "Medium",
+                                   BasinSize == 4 ~ "Large",
+                                   TRUE ~ as.character(NA)),
+         StreamSizeCatPhase = paste0(Panel,StreamSizeCat ),
+         BasinSize = case_when(AREA_SQ_MILES < 1 ~ 1,
+                               between(AREA_SQ_MILES, 1, 9.99999999) ~ 2, #between is >= and <= 
+                               between(AREA_SQ_MILES, 10, 49.9999999) ~ 3, #between is >= and <= 
+                               AREA_SQ_MILES >= 50 ~ 4,
+                               TRUE ~ as.numeric(NA))) %>%
+  dplyr::select(-c(AREA_SQ_MILES)) %>% 
+  dplyr::select(station, sampleID, Station_Id, everything()) %>% 
+  rename(`strahler order` = 'strahler.order',
+         `Latitude-DD` = 'Latitude.DD',
+         `Longitude-DD` = 'Longitude.DD') %>% 
+  #fix known issue
+  mutate(designweight = case_when(sampleID %in% c('1AXMJ000.42_2012', '1AXMJ000.42_2014', '1AXMJ000.42_2016')~ 947.62919999999997,
+                                  TRUE ~ as.numeric(designweight))) %>% 
+  mutate(sampleID = case_when(sampleID == '2-JKS070.97' ~ '2-JKS063.03',
+                              TRUE = as.character(sampleID)))
+
+
+
+
+designStatusNew <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virginia/Freshwater ProbMon/IR2024/Wadeable_ProbMon2021-2022.xlsx',
+                                  #'originalData/Wadeable_ProbMon2021-2022.xlsx', # or from here for local archiving
+                                  sheet = 'withMetadata') %>% 
+  
+  # if no siteID, assign one
+  mutate(StationID = coalesce(StationID, siteID)) %>% 
+  
+  dplyr::select(Year, StationID:set, Station_Id = siteID) %>% 
+  
+  #will use CEDS lat/lngs just in case people messed with coordinates
+  left_join(dplyr::select(prob2024fin, StationID, Year, #`strahler order` = Order, 
+                          `Longitude-DD` =  LongitudeDD, `Latitude-DD` = LatitudeDD, 
+                          Basin:IR2024, Order, weight.category = weightcategory) %>% 
+              mutate(`strahler order` = Order),
+            by = c('StationID', 'Year')) %>%
+  
+  mutate(sampleID = coalesce(StationID_Trend, StationID), # use StationID_Trend where available
+         `Latitude-DD` = coalesce(`Latitude-DD`, Latitude),
+         `Longitude-DD` = coalesce(`Longitude-DD`, Longitude),
+         station = as.numeric(NA)) %>% # placeholder for now
+  dplyr::select(names(designStatusOld))
+
+
+
+# smash together in this order so the station count is correct
+designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS'),
+                             filter(designStatusNew, status == 'TS'),
+                             filter(designStatusOld, status != 'TS'),
+                             filter(designStatusNew, status != 'TS')) %>% 
+  mutate(station = 1:n()) %>% 
+  dplyr::select(names(designStatusOld), IR2024)
+
+#write.csv(designStatusFin, 'processedData/designStatusIR2024.csv', row.names = F, na = '')
+
+```
+
+
+had to manually change BasinSize for 1AQUA004.35 and 2-JKS063.03 to 3,4 bc missing after manual QA in design status
