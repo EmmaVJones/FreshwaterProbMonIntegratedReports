@@ -1,0 +1,407 @@
+---
+title: "How to run the IR2024 automated assessment"
+author: "Emma Jones"
+date: "September 2, 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+options(digits = 12) #critical to seeing all the data
+
+library(tidyverse)
+library(sf)
+library(readxl)
+library(pins)
+library(config)
+library(EnvStats)
+library(lubridate)
+library(round) # for correct round to even logic
+
+# Bring in Assessment functions from app
+source('automatedAssessmentFunctions.R')
+source('updatedBacteriaCriteria.R')
+
+# get configuration settings
+conn <- config::get("connectionSettings")
+
+# use API key to register board
+board_register_rsconnect(key = conn$CONNECT_API_KEY,  #Sys.getenv("CONNECT_API_KEY"),
+                          server = conn$CONNECT_SERVER)#Sys.getenv("CONNECT_SERVER"))
+
+```
+
+This document walks users through running the automated assessment for any given set of stations and waterbody type. Prior to this point, the user needs to have completed the necessary prerequisites of attributing stations with AU and WQS information. This dataset is a companion to the rivers and streams/lake assessment applications and is **NOT** final. The results cited in this table are identical to the app calculations and are meant for assessor review, QA, editing prior to submitting to WQA CEDS bulk data upload.
+
+# Prerequisites
+The user will have to have all conventionals data, water column metals, and sediment metals organized by Roger for the window. **Additionally, the CEDS EDAS data needs to be exported and available for use, including regional Bioassessment calls**. Last cycle's finalized regional assessment layer (shapefile with AUs) are the spatial component needed. Lastly, the assessor must have the stations bulk data upload table filled out to their requirements in order to run the assessment scripts. 
+
+## Pin Data/Retrieve Data
+
+Scripts to organize and pin data are in ../2.organizeMetadata/organizeStationMetadata_DRAFT.Rmd 
+
+## Bring in Pinned data
+
+Draft data created for testing
+
+```{r pull pins}
+conventionals <- pin_get('ejones/conventionals2024draft', board = 'rsconnect')
+conventionals_distinct <- pin_get('ejones/conventionals2024_distinctdraft', board = 'rsconnect')  # see below for fix coming this way at final stage
+WCmetals <- pin_get("WCmetalsIR2024",  board = "rsconnect") 
+WCmetalsForAnalysis <- pin_get("ejones/WCmetalsForAnalysisIR2024",  board = "rsconnect") 
+Smetals <- pin_get("SmetalsIR2024",  board = "rsconnect")
+
+
+WQMstationFull <- pin_get("ejones/WQM-Station-Full", board = "rsconnect")
+VSCIresults <- pin_get("ejones/VSCIresults", board = "rsconnect") %>%
+  filter( between(`Collection Date`, assessmentPeriod[1], assessmentPeriod[2]) )
+VCPMI63results <- pin_get("ejones/VCPMI63results", board = "rsconnect") %>%
+  filter( between(`Collection Date`, assessmentPeriod[1], assessmentPeriod[2]) )
+VCPMI65results <- pin_get("ejones/VCPMI65results", board = "rsconnect") %>%
+  filter( between(`Collection Date`, assessmentPeriod[1], assessmentPeriod[2]) ) 
+assessmentWindowLowFlows <- pin_get('ejones/AssessmentWindowLowFlows', board = 'rsconnect')
+#subbasinToVAHU6 <- pin_get('ejones/subbasinToVAHU6', board = 'rsconnect')
+basins <- st_as_sf(pin_get('ejones/DEQ_VAHUSB_subbasins_EVJ', board = 'rsconnect'))
+
+
+# this will be taken care of in 1.preprocessing at the final draft stage and we can delete this out
+# conventionals_distinct <- conventionals_distinct %>% 
+#   filter(!is.na(Latitude) | !is.na(Longitude)) %>% 
+#   st_as_sf(coords = c("Longitude", "Latitude"), 
+#                remove = F, # don't remove these lat/lon cols from df
+#                crs = 4326) %>% 
+#   st_intersection(dplyr::select(basins, BASIN_CODE)) 
+# saveRDS(conventionals_distinct, 'data/conventionals_distinctDRAFT.RDS')
+conventionals_distinct <- readRDS('data/conventionals_distinctDRAFT.RDS')
+```
+
+Placeholders until data window sorted
+
+```{r placeholders, echo=FALSE, message=F, warning=F}
+## Placeholders
+stations2020IR <- pin_get("stations2020IR-sf-final", board = "rsconnect")
+
+markPCB <- read_excel('data/oldData/2022 IR PCBDatapull_EVJ.xlsx', sheet = '2022IR Datapull EVJ')
+fishPCB <- read_excel('data/oldData/FishTissuePCBsMetals_EVJ.xlsx', sheet= 'PCBs')
+fishMetals <- read_excel('data/oldData/FishTissuePCBsMetals_EVJ.xlsx', sheet= 'Metals')
+```
+
+
+## Bring in Station Table from two previous assessments 
+
+```{r stations table 2018}
+stationsTable2022 <- readRDS('../2.organizeMetadata/data/stationsTable2022.RDS')
+stationsTable2020 <- readRDS('../2.organizeMetadata/data/stationsTable2020.RDS')
+```
+
+
+## Bring in lake nutrient standards
+
+```{r lake nutrient standards}
+lakeNutStandards <- read_csv('data/9VAC25-260-187lakeNutrientStandards.csv')
+```
+
+
+
+# Workflow
+
+The following steps complete the automated assessment.
+
+## Bring in user station table data
+
+This information communicates to the scripts which stations should be assessed and where they should be organized (AUs). It also has data from the last cycle to populate the historical station information table in the application.
+
+**To Note: The AU assignments in this table are valid as of the start of the assessment process. For any AU splits/reassignments, the assessors control that through local (.csv) copies of the output of this script that is uploaded to the relevant Assessment Application on the Connect Server (and subsequently uploaded to CEDS via the bulk data upload tool).**
+
+```{r stationTable, echo = FALSE}
+stationTable <- pin_get('ejones/stationsTable2024begin', board = 'rsconnect')
+```
+
+## Bring in Station Table Bulk Upload Template
+
+```{r bulk upload template}
+stationsTemplate <- stationTable[0,] %>% 
+  mutate(across(matches(c("EXC", "SAMP")), as.numeric)) %>% 
+  # new addition that breaks station table upload template but very helpful for assessors
+  mutate(BACTERIADECISION = as.character(NA),
+         BACTERIASTATS = as.character(NA),
+         `Date Last Sampled` = as.character(NA)) 
+
+```
+
+## Attach WQS information
+
+
+Pull pinned WQS info saved on server. Then perform a series of data manipulation steps that:
+
+1. Join WQS to station table by StationID
+2. Create a new variable that will correct for Class II pH differences for Tidal Waters
+3. Join actual WQS critera (object name WQSvalues) to each StationID
+4. Perform a little data cleanup to lose columns unnecessary for future steps
+5. Join station ecoregion information (for benthic analyses)
+6. Standardize lake names  (to match 187 lake names for future joining of criteria)
+    + Some problematic stations need manual steps to attach the correct lake name
+7. Join lake nutrient criteria to individual stations
+    + Lake Drummond requires some extra manual work per hh special standard https://law.lis.virginia.gov/admincode/title9/agency25/chapter260/section310/
+8. Rearrange data schema to more useful format after all previous joins
+9. Correct units for nutrient criteria to match conventionals data format (ug/L to mg/L)
+
+
+```{r pull WQS info}
+WQSlookup <- pin_get("WQSlookup-withStandards",  board = "rsconnect")
+citmonWQS <- readRDS('C:/HardDriveBackup/R/GitHub/IR2024/1.preprocessData/data/citmonStationsWithWQS.RDS') %>% 
+  dplyr::select(StationID = `Station Id`, `WQS Section`, `WQS Class`, `WQS Special Standard`)
+
+stationTable <- stationTable %>% # (1)
+  
+  # Special CitMon/Non Agency step until full WQS_ID inplementation in IR2028
+  left_join(citmonWQS, by = c('STATION_ID' = 'StationID')) %>% # (1)
+  
+  # Join to real WQS_ID's (do this second in case citmon station double listed, want proper WQS_ID if available) (1)
+  left_join(WQSlookup, by = c('STATION_ID' = 'StationID')) %>%
+  
+  # coalesce these similar fields together, taking WQS_ID info before citmon method
+  mutate(CLASS = coalesce(CLASS, `WQS Class`),
+         SEC = coalesce(SEC, `WQS Section`),
+         SPSTDS = coalesce(SPSTDS, `WQS Special Standard`)) %>% 
+  dplyr::select(-c(`WQS Section`, `WQS Class`, `WQS Special Standard`)) %>% 
+  
+  # Fix for Class II Tidal Waters in Chesapeake (bc complicated DO/temp/etc standard)
+  mutate(CLASS_BASIN = paste(CLASS,substr(BASIN, 1,1), sep="_")) %>% # (2)
+  mutate(CLASS_BASIN = ifelse(CLASS_BASIN == 'II_7', "II_7", as.character(CLASS))) %>% # (2)
+  # Join actual WQS criteria to each StationID
+  left_join(WQSvalues, by = 'CLASS_BASIN') %>% # (3)
+  # data cleanup
+  dplyr::select(-c(CLASS.y,CLASS_BASIN)) %>% # (4)
+  rename('CLASS' = 'CLASS.x') %>% # (4)
+  
+   # As of 1/5/23, confirmed that water temperature criteria for class VII waters is determined by the former class of the water. Also confirmed that all class VII waters in TRO, PRO, and NRO were formerly class III, which means that these waters have a maximum temperature criteria of 32 degrees C.
+  mutate(`Max Temperature (C)` = case_when(
+    CLASS == "VII" & REGION == "TRO" ~ 32,
+    CLASS == "VII" & REGION == "PRO" ~ 32,
+    CLASS == "VII" & REGION == "NRO" ~ 32,
+    TRUE ~ as.numeric(`Max Temperature (C)`) )) %>% # (3)
+  
+  # Join station ecoregion information (for benthic analyses)
+  left_join(dplyr::select(WQMstationFull, WQM_STA_ID, EPA_ECO_US_L3CODE, EPA_ECO_US_L3NAME) %>% #(5)
+              distinct(WQM_STA_ID, .keep_all = TRUE), by = c('STATION_ID' = 'WQM_STA_ID')) %>%
+  # Standardize lake names (to match 187 lake names for future joining of criteria)
+  lakeNameStandardization() %>% # standardize lake names (6)
+  
+   
+  # extra special step (6)
+  mutate(Lake_Name = case_when(STATION_ID %in% c('2-TRH000.40') ~ 'Thrashers Creek Reservoir',
+                               STATION_ID %in% c('2-LSL000.16') ~ 'Lone Star Lake F (Crystal Lake)',
+                               STATION_ID %in% c('2-LSL000.04') ~ 'Lone Star Lake G (Crane Lake)',
+                               STATION_ID %in% c('2-LSL000.20') ~ 'Lone Star Lake I (Butler Lake)',
+                               STATION_ID %in% c('2-NWB002.93','2-NWB004.67',
+                                                 '2-NWB006.06') ~ 'Western Branch Reservoir',
+                               STATION_ID %in% c('2-LDJ000.60') ~ 'Lake Nottoway (Lee Lake)',
+                               TRUE ~ as.character(Lake_Name))) %>%
+  
+  # special step for 187 lakes missing designation
+  #mutate(Lakes_187B = case_when(STATION_ID == '1BNTH043.48' ~ 'y',
+  #                              TRUE ~ as.character(Lakes_187B))) %>% 
+
+  # Join lake nutrient criteria to individual stations
+  left_join(lakeNutStandards %>% 
+              mutate(Lakes_187B = 'y'),  # special step to make sure the WQS designation for 187 are correct even when not
+            by = c('Lake_Name')) %>% # (7)
+  # lake drummond special standards
+  mutate(Lakes_187B = ifelse(is.na(Lakes_187B.y ), Lakes_187B.x, Lakes_187B.y), 
+         # dd. For Lake Drummond, located within the boundaries of Chesapeake and Suffolk in the Great Dismal Swamp, chlorophyll a shall not exceed 35 µg/L and total phosphorus shall not exceed 40 µg/L at a depth of one meter or less. https://law.lis.virginia.gov/admincode/title9/agency25/chapter260/section310/
+         `Chlorophyll a (ug/L)` = case_when(Lake_Name %in% c('Lake Drummond') ~ 35,
+                                            TRUE ~ as.numeric(`Chlorophyll a (ug/L)`)),
+         `Total Phosphorus (ug/L)` = case_when(Lake_Name %in% c('Lake Drummond') ~ 40,
+                                               TRUE ~ as.numeric(`Total Phosphorus (ug/L)`))) %>% # (7)
+  dplyr::select(STATION_ID:StreamType, Lakes_187B, `Description Of Waters`:`Total Phosphorus (ug/L)`) %>% # (8)
+  # match lake limit to TP data unit
+  mutate(`Total Phosphorus (mg/L)` = `Total Phosphorus (ug/L)` / 1000) # (9)
+
+
+# Identify stations that are missing WQS
+missingWQS <- filter(stationTable, is.na(CLASS))
+```
+
+
+
+
+
+## Identify Station Type
+
+We only want to run riverine methods on riverine stations and only lake methods on lake stations, so identify all stations that have lake AU designations. We will use this information later to determine how to analyze certain parameters that have different methods based on waterbody type. 
+
+```{r identify lake stations}
+lakeStations <- filter_at(stationTable,
+                          .vars = vars(contains("ID305B")),
+                          .vars_predicate = any_vars(str_detect(., 'L_')))
+
+# QA check: make sure all 187 lakes have chla and tp standards
+# lakeStationsImportant <- dplyr::select(lakeStations, STATION_ID:ID305B_3, NUT_TP_EXC:NUT_CHLA_STAT, WQS_ID, GNIS_Name, WATER_NAME, Lakes_187B, Lake_Name:`Total Phosphorus (ug/L)`) %>%
+#   filter(!is.na(WQS_ID))
+
+
+```
+
+<!-- And drop estuarine stations as well. -->
+
+<!-- ```{r} -->
+<!-- estuarineStations <- filter_at(stationTable, -->
+<!--                           .vars = vars(contains("ID305B")), -->
+<!--                           .vars_predicate = any_vars(str_detect(., 'E_'))) -->
+<!-- bothTypesE <- filter_at(estuarineStations, -->
+<!--                           .vars = vars(contains("ID305B")), -->
+<!--                           .vars_predicate = any_vars(str_detect(., 'R_')))  -->
+<!-- #View(dplyr::select(stationTable, STATION_ID, ID305B_1, WQS_ID, everything())) -->
+
+<!-- # filter out estuarine stations for analysis -->
+<!-- # stationTable <- filter(stationTable, ! STATION_ID %in% estuarineStations$STATION_ID) %>% -->
+<!-- #   bind_rows(bothTypesE) # add northern station back in to be safe -->
+
+
+<!-- # for running only a few select sites -->
+<!-- # stationTable1 <- stationTable -->
+<!-- # stationTable <- filter(stationTable, str_detect(STATION_ID, '7-POQ' )) -->
+<!-- ``` -->
+
+
+## Bring in Low Flow Information
+
+We also need to bring in the previously analyzed low flow periods for the assessment window. These USGS stream gages are analyzed using the 7Q10 methodology consistent with the DEQ Water Permitting Program with two assumption changes:
+
+1. Provisional data are accepted (due to the expedited assessment timeline). QA/QC changes from Provision to Accepted data generally involve storm event corrections, so using Provisional data should not affect low flow analyses.
+2. Gages analyzed for low flow statistics require 10 or more valid water years for inclusion in analyses.
+
+This gage-specific information is spatially joined to major river subbasins to extrapolate low flow conditions to stations that fall into said watersheds. The temporal windows where low flow events were recorded in a watershed are joined to stations that fall into said watershed. Lake stations are removed from this flag. Parameters that should not be analyzed during low flow events are flagged during the automated assessment process and presented to the assessment staff in the assessment applications. A station-level flag is presented in the stationTable output of these scripts for users who prefer to only use the tabular output from the automated assessment tools.
+
+
+Spatially join when doing stuff now with draft data
+
+```{r low flow data}
+# Simplify the data first by date and BASIN_CODE as to not duplicate data when joined to conventionals raw data
+assessmentWindowLowFlowsBasinLevelFlag <- dplyr::select(assessmentWindowLowFlows, Date, `Gage ID`, `7Q10 Flag`, BASIN_CODE) %>% 
+  group_by(Date, BASIN_CODE) %>% 
+  summarise(`7Q10 Flag Gage` = paste(unique(`Gage ID`),collapse = ", "),
+            `7Q10 Flag` = `7Q10 Flag`) %>% 
+  # still have duplicate rows with same info, so need to drop those or will duplicate conventionals data when joined in
+  mutate(n = 1:n()) %>% 
+  filter(n == 1) %>% 
+  dplyr::select(-n) # get rid of count bc no longer needed
+
+
+conventionals <- conventionals %>% 
+  left_join(dplyr::select(conventionals_distinct, FDT_STA_ID, BASIN_CODE) %>% st_drop_geometry(),
+            by = 'FDT_STA_ID') %>% 
+  mutate(SampleDate = as.Date(FDT_DATE_TIME)) %>% 
+  #left_join(dplyr::select(stationTable, STATION_ID, VAHU6), by = c('FDT_STA_ID' = 'STATION_ID')) %>% # join in VAHU6 information from Assessors
+  #left_join(dplyr::select(subbasinToVAHU6, VAHU6, BASIN_CODE, Basin_Code), by = 'VAHU6')  # join in basin information by VAHU6
+  left_join(assessmentWindowLowFlowsBasinLevelFlag,
+            by = c('SampleDate' = 'Date', 'BASIN_CODE' = 'BASIN_CODE')) %>% 
+  dplyr::select(-SampleDate) # rm unnecessary column
+
+
+
+# Special step to remove low flow information from lake stations
+conventionals <- conventionals %>% 
+  mutate(`7Q10 Flag` = case_when(FDT_STA_ID %in% lakeStations$STATION_ID ~ NA_character_,
+                                 TRUE ~ `7Q10 Flag`))
+
+#View(filter(conventionals, `7Q10 Flag` == "7Q10 Flag"))
+```
+
+That dataset is money. We want to use that one in the shiny applications, so make sure you pin that to the server (and update it any time new conventionals data are processed).
+
+```{r pin new conventionals}
+# pin(conventionals, name = "conventionals2024draft_with7Q10flag", 
+#     description = "Draft Conventionals data for IR2024 with added 7Q10 flag joined at major river basin level. This is used for the shiny app versions of the automated assessment protocol to save rendering time", board = 'rsconnect')
+```
+
+
+
+# Automated Assessment Steps
+
+Finally, we are ready to analyze some data! Go through stationTable one station at a time, join conventionals, analyze all available data by each parameter function (or nested functions), and report out results in the WQA CEDS bulk upload template format
+
+
+Only run for metals with data
+```{r}
+#stationTable <- filter(stationTable, STATION_ID %in% WCmetalsForAnalysis$Station_Id)
+```
+
+
+```{r Automated Assessment}
+# make placeholder objects to store data results
+waterColumnMetalsAnalysis <- tibble()
+
+
+
+# loop over all sites, not super efficient but get the job done in easy to follow format
+for(i in 1:nrow(stationTable)){
+  print(paste(i, "of", nrow(stationTable)))
+  
+stationData <- filter(conventionals, FDT_STA_ID %in% stationTable$STATION_ID[i]) %>%
+    #stationData <- filter(conventionals, FDT_STA_ID == '1ABIR000.76') %>% #'1AACO014.57') %>% #"4ACRV006.19") %>% #"1ABIR000.76") %>%# test a specific station
+    left_join(stationTable, by = c('FDT_STA_ID' = 'STATION_ID')) %>%
+    # Special Standards Correction step. This is done on the actual data bc some special standards have temporal components
+    pHSpecialStandardsCorrection() %>% # correct pH to special standards where necessary
+    temperatureSpecialStandardsCorrection() #%>% # correct temperature special standards where necessary
+    # special lake steps
+    # {if(stationTable$STATION_ID[i] %in% lakeStations$STATION_ID)
+    #   #{if('1ABIR000.76' %in% lakeStations$STATION_ID)
+    #   suppressWarnings(suppressMessages(
+    #     mutate(., lakeStation = TRUE) %>%
+    #       thermoclineDepth())) # adds thermocline information and SampleDate
+    #   else mutate(., lakeStation = FALSE) }
+  
+if(nrow(stationData)>0){
+  
+   # Water Column Metals analysis using Aquatic Life Toxics rolling window method
+  WCmetalsStationAnalysis <- filter(WCmetalsForAnalysis, Station_Id %in%  stationData$FDT_STA_ID) %>% 
+        metalsAnalysis( stationData, WER = 1) %>% 
+        rename(FDT_STA_ID = Station_Id) %>% 
+        mutate(`Criteria Type` = Criteria) 
+  WCmetalsExceedanceAnalysis <- annualRollingExceedanceAnalysis(WCmetalsStationAnalysis, yearsToRoll = 3, aquaticLifeUse = TRUE)
+  WCmetalsExceedanceSummary <- annualRollingExceedanceSummary(WCmetalsExceedanceAnalysis)  
+
+  # quick summary output
+  waterColumnMetalsAnalysis <- bind_rows(waterColumnMetalsAnalysis,
+                                         WCmetalsExceedanceAnalysis = list(WCmetalsExceedanceAnalysis),
+                                         WCmetalsExceedanceSummary = list(WCmetalsExceedanceSummary)) # ugly but gets us what we need
+                                         #WCmetalsExceedanceSummary)
+  # normally what one would do, useful for full app output
+  # waterColumnMetalsAnalysis <- bind_rows(waterColumnMetalsAnalysis,
+  #                                        tibble(StationID = unique(stationData$FDT_STA_ID),
+  #                                               WCmetalsStationAnalysis =  list(WCmetalsStationAnalysis),
+  #                                               WCmetalsExceedanceAnalysis = list(WCmetalsExceedanceAnalysis),
+  #                                               WCmetalsExceedanceSummary = list(WCmetalsExceedanceSummary)))    
+}
+# } else{
+#   waterColumnMetalsAnalysis <- bind_rows(waterColumnMetalsAnalysis,
+#                                          tibble(StationID = unique(stationTable$STATION_ID[i]),
+#                                                 WCmetalsStationAnalysis =  list(NULL),
+#                                                 WCmetalsExceedanceAnalysis = list(NULL),
+#                                                 WCmetalsExceedanceSummary = list(NULL))) 
+#   
+#  
+# }
+
+}
+```
+
+
+Unpack these results to find any issues.
+
+```{r}
+filter(waterColumnMetalsAnalysis, `Suggested Result` != 'Supporting') # everything is FS
+
+filter(waterColumnMetalsAnalysis, `Exceedances in Rolled Window` >0) %>% View() # find any exceedances, investigate more in riverine app
+
+
+```
+
+
+
+```{r}
+saveRDS(waterColumnMetalsAnalysis, 'processedStationData/WCmetalsForApp.RDS')
+```

@@ -47,9 +47,16 @@ surveyData <- select(allData, StationID_Trend,Year,DO:MetalCCU,CALCIUM:MERCURY,w
 
 
 
-Now time to find any exceedances of metals criteria for acute or chronic.
+Now time to find any exceedances of metals criteria for acute or chronic. In IR2024, the guidance changed on how we assess these parameters for Aquatic Life use. To avoid having to go  back to the original data, we can use the cleaned WCmetalsForAnalyisIR2024 pinned dataset and the same assessment logic to run through our probMon sites efficiently with the most up to date analysis method.
+
+Since the assessment is programmed in 3.6.2 and needs to connect to the R server for pinned data, run this next chunk sourced code in 3.6.2!
+
+See 2.dataAnalysis_MetalsModule.Rmd
+
 
 ```{r look for metals exceedances}
+# how we ran the analysis previously
+
 # # Capitalize first letter in a word easily
 # capwords <- function(s, strict = FALSE) {
 #   cap <- function(s) paste(toupper(substring(s, 1, 1)),
@@ -130,7 +137,7 @@ Now time to find any exceedances of metals criteria for acute or chronic.
 # #write.csv(metalsAssessment, 'processedData/metalsAssessmentResults.csv')
 ```
 
-
+After investgating each of the metals that exceeded in the riverine assessment app, here is a summary for the report to ingest.
 
 
 ## CDF analyses
@@ -323,7 +330,7 @@ rrisk <- left_join(surveyData,select(designStatus,siteID, Year,`Longitude-DD`,`L
                    ,by=c('siteID','Year')) %>%
   select(siteID,Year,`Longitude-DD`,`Latitude-DD`,everything()) %>%
   left_join(weights, by=c('siteID','Year')) %>%
-  select(siteID:`Latitude-DD`,finalweight_all,TN,TP,TDS,LRBS,TotHab,VSCIVCPMI,MetalCCU)
+  select(siteID:`Latitude-DD`,finalweight_all,TN,TP,TDS,LRBS,TotHab,VSCIVCPMI,MetalCCU, pH, DO)
 
 rrisk$VSCIstatus <- cut(rrisk$VSCIVCPMI,c(0,50,60,100),labels=c('Poor','Fair','Good'))  
 rrisk$TotHabstatus <- cut(rrisk$TotHab, c(0,120,150,200),labels=c('Poor','Fair','Good'))
@@ -332,6 +339,11 @@ rrisk$TPstatus <- cut(rrisk$TP, c(0,0.02,0.05,100),labels=c('Good','Fair','Poor'
 rrisk$TDSstatus <- cut(rrisk$TDS, c(0,100,350,20000),labels=c('Good','Fair','Poor'))
 rrisk$MetalCCUstatus <- cut(rrisk$MetalCCU, c(0,1,2,100),labels=c('Good','Fair','Poor'))
 rrisk$LRBSstatus <- cut(rrisk$LRBS, c(-10,-1,-0.5,0.5,10),labels=c('Poor','Fair','Good','Fair2'))
+#extras
+rrisk$DOstatus <- cut(rrisk$DO,c(0,4,8,20),labels=c('Poor','Fair','Good'))  
+rrisk$pHstatus <- cut(rrisk$pH,c(0,6,9,14),labels=c('Poor','Good','Poor'))  
+
+
 names(rrisk)
 rrisk$VSCIstatus[ rrisk$VSCIstatus == "Fair" ] = NA
 rrisk$TotHabstatus[ rrisk$TotHabstatus == "Fair" ] = NA
@@ -341,6 +353,9 @@ rrisk$TDSstatus[ rrisk$TDSstatus == "Fair" ] = NA
 rrisk$MetalCCUstatus[ rrisk$MetalCCUstatus == "Fair" ] = NA
 rrisk$LRBSstatus[ rrisk$LRBSstatus == "Fair" ] = NA
 rrisk$LRBSstatus[ rrisk$LRBSstatus == "Fair2" ] = NA
+#extras
+rrisk$DOstatus[ rrisk$DOstatus == "Fair" ] = NA
+rrisk$pHstatus[ rrisk$pHstatus == "Fair" ] = NA
 
 ```
 
@@ -354,7 +369,7 @@ resp.var<-"VSCIstatus"
 # For stressor variables, we will initially select a few stressor variables 
 # All of these must be condition class variables.
 
-stres.vars<- c("TotHabstatus","TNstatus","TPstatus","TDSstatus","MetalCCUstatus","LRBSstatus");
+stres.vars<- c("TotHabstatus","TNstatus","TPstatus","TDSstatus","MetalCCUstatus","LRBSstatus", "DOstatus", 'pHstatus');
 
 # Create a vector containing the names of all selected stressor variables
 #stres.vars<-c("PTL_COND","NTL_COND","TURB_COND","ANC_COND","SALINITY_COND",
@@ -406,8 +421,8 @@ relrisk.estimates<-relrisk.analysis(sites=sites.va.rr,subpop=subpop.va.rr,
                                     stressor.levels=rep(list(c("Poor","Good")),length(stres.vars)))
 
 
-write.csv(relrisk.estimates, file = "processedData/relriskIR2024.csv", row.names = FALSE)
-write.csv(rrisk, file = "processedData/rrisk.csv", row.names = FALSE)
+write.csv(relrisk.estimates, file = "processedData/relriskIR2024_withDOpH.csv", row.names = FALSE)
+write.csv(rrisk, file = "processedData/rrisk_withDOpH.csv.csv", row.names = FALSE)
 
 ```
 

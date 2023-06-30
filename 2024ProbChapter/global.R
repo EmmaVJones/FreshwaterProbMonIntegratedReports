@@ -30,6 +30,17 @@ rr <- read.csv('processedData/relriskIR2024.csv') %>%
                                 "TPstatus"='Total Phosphorus')) %>%
   mutate(MoE = StdError.log *1.96)
 
+# rr <- read.csv('processedData/relriskIR2024_withDOpH.csv') %>%
+#        mutate(Stressor=dplyr::recode(Stressor,"TotHabstatus"="Habitat Disturbance",
+#                                       "TDSstatus"='Ionic Strength',
+#                                       "TNstatus"='Total Nitrogen',
+#                                       "MetalCCUstatus"='Cumulative Dissolved Metals',
+#                                       "LRBSstatus"='Streambed Sedimentation',
+#                                       "TPstatus"='Total Phosphorus',
+#                                       "DOstatus" = 'Dissolved Oxygen',
+#                                       'pHstatus'= 'pH')) %>%
+#       mutate(MoE = StdError.log *1.96)
+
 
 # VLOOKUP (Excel function hack) by Julin Maloof
 vlookup <- function(ref, #the value or values that you want to look for
