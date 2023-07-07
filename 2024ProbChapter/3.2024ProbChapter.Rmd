@@ -754,6 +754,19 @@ stressparams <- data.frame(stress=c('Total Nitrogen (mg/L)','Total Phosphorus (m
                                       '(Kaufmann 1999)','(DEQ 2006b)','(Clements 2000)'))
 names(stressparams) <- c('Stressor Parameters','Optimal','Suboptimal','Classification Reference')
 knitr::kable(stressparams,align='c')
+
+# stressparams <- data.frame(stress=c('Total Nitrogen (mg/L)','Total Phosphorus (mg/L)',
+#                                     'Habitat Degradation (unitless)',
+#                                     'Streambed Sedimentation (unitless)',
+#                                     'Ionic Strength (TDS mg/L)',
+#                                     'Cumulative Dissolved Metals (unitless)',
+#                                     "Dissolved Oxygen (mg/L", 'pH (unitless)'),
+#                            Optimal=c('< 1','< 0.02','> 150','-0.5 to 0.5','< 100','< 1', '> 4', '6 to 9'),
+#                            Suboptimal=c('> 2','> 0.05','< 120','< -1.0 or > 0.5','> 350','> 2', '< 4', '< 6 or > 9'),
+#                            classref=c('(DEQ 2006a)','(DEQ 2006a)','(USEPA 1999)',
+#                                       '(Kaufmann 1999)','(DEQ 2006b)','(Clements 2000)', '(DEQ 2006a)?', '(DEQ 2006a)?'))
+# names(stressparams) <- c('Stressor Parameters','Optimal','Suboptimal','Classification Reference')
+# knitr::kable(stressparams,align='c')
 ```
 
       In the following analyses, water quality parameters without numeric water quality criteria are presented using bar plots and micromaps. Similar to previous Integrated Reports, the bar plots represent estimates drawn from data in the `r IRyear` assessment window (`r IRrange`). The micromaps use data from the entire probabilistic monitoring dataset (2001 - `r IRyearWindowEnd`) in order to present parameter estimates that are representative at a basin-specific scale. Thus, Virginia stream mile estimates are not identical between the micromap and bar plot examples. The micromaps intend to highlight the extent to which these parameters affect major river basins across Virginia as well as the extent of stream miles categorized as suboptimal by distinct stressors. Because the same scale (percent of stream miles) is used across all the following micromaps, one can efficiently compare the degree to which different parameters influence the percent of suboptimal stream miles across Virginia's river basins.
@@ -1418,19 +1431,37 @@ DT::datatable(rankBasins2,escape=F, rownames = F,
 
       Relative risk is a term borrowed from the medical field and applied here to communicate the potential impact a stressor has on the aquatic environment. For example, it has been shown that an individual with total cholesterol above 240 mg/dl is at greater risk for heart disease than an individual whose cholesterol is below 200 mg/dl. When an individual has a cholesterol level above 240, their relative risk of having heart disease is higher than an individual with cholesterol level below 200.
 
-      While stressor extent shows how prevalent or widespread a potential stressor is in Virginia streams (Figure 4.4-26), relative risk estimates the statistical likelihood of a degraded biological community given a stressor measured in a system at a certain value (Figure 4.4-25). Calculation of relative risk requires classification of water quality responses (e.g., the benthic macroinvertebrate indices -- Table 4.4-5) and the water quality stressors (Table 4.4-8) into optimal and suboptimal categories. DEQ classified biological response parameters based on the biological assessment threshold used in the water quality assessment process. The stressor indicators in Table 4.4-8 were classified using screening values from peer reviewed literature studies. It is important to remember that the stressor screening values are not equivalent to numeric water quality criteria in the Commonwealth of Virginia. Like the river basin-scale analyses, relative risk and stressor extent are data-intensive statistical techniques requiring the entire probabilistic monitoring dataset (2001 - `r IRyearWindowEnd`) and do not suggest any water quality condition or specific potential or probable stressor at a specific location for a specific water body.
+      While stressor extent shows how prevalent or widespread a potential stressor is in Virginia streams (Figure 4.4-26), relative risk estimates the statistical likelihood of a degraded biological community given a stressor measured in a system at a certain value (Figure 4.4-25). Calculation of relative risk requires classification of water quality responses (e.g., the benthic macroinvertebrate indices -- Table 4.4-5) and the water quality stressors (Table 4.4-8) into optimal and suboptimal categories. DEQ classified biological response parameters based on the biological assessment threshold used in the water quality assessment process. The stressor indicators in Table 4.4-8 were classified using screening values from peer reviewed literature studies and Virginia Water Quality Standards (for DO and pH). It is important to remember that the stressor screening values are not equivalent to numeric water quality criteria in the Commonwealth of Virginia. Optimal categories for DO was determined at > 4 mg/L and from 6 to 9 on the pH scale. Suboptimal DO was defined at < 4 mg/L and pH values < 6 or > 9. Like the river basin-scale analyses, relative risk and stressor extent are data-intensive statistical techniques requiring the entire probabilistic monitoring dataset (2001 - `r IRyearWindowEnd`) and do not suggest any water quality condition or specific potential or probable stressor at a specific location for a specific water body.
 
       The relative risks for aquatic stressors can be interpreted in a similar manner to the heart disease example. Figure 4.4-26 illustrates that the relative risk to the biological community due to habitat disturbance is `r format(filter(rr,Stressor=='Habitat Disturbance')$Estimate,digits=1,nsmall=1)`; thus, the biological community is `r format(filter(rr,Stressor=='Habitat Disturbance')$Estimate,digits=1,nsmall=1)` times more likely to be considered suboptimal when habitat disturbance scores are below 120 (USEPA 1999). Relative risk values larger than 1 indicate an elevated risk to the biological community; consequently, only water quality stressors with a relative risk greater than 1 are reported in this chapter. pH was also evaluated for increased risk to the biological community but did not show significant relative risk to the biological community.
 
-##### Figure 4.4-25. Relative Risk for major benthic macroinvertebrate stressors in all Virginia streams. The horizontal lines associated with the parameters illustrate the 95% confidence intervals. The vertical dashed line at 1 indicates significance; thus, all relative risk estimates and confidence intervals that exceed the dashed vertical are significant. Relative risk shows the number of times more likely a benthic macroinvertebrate community is to be scored in the suboptimal range if the parameter shown on the y-axis is degraded. Data encompasses samples collected from 2001 - `r IRyearWindowEnd`.
+##### Figure 4.4-25. Relative Risk for major benthic macroinvertebrate stressors in all Virginia streams. The horizontal lines associated with the parameters illustrate the 95% confidence intervals. The vertical dashed line at 1 indicates significance; thus, all relative risk estimates and confidence intervals that exceed the dashed vertical are significant. Orange bars indicate parameters with screening values only (no numeric water quality criteria or assessment thresholds) and green bars indicate parameters with numeric water quality criteria (pH, DO) or assessment thresholds. Relative risk shows the number of times more likely a benthic macroinvertebrate community is to be scored in the suboptimal range or below water quality criteria/assessment thresholds (in the case of pH and DO) if the parameter shown on the y-axis is degraded. Data encompasses samples collected from 2001 - `r IRyearWindowEnd`.
 
 ```{r relativeRisk,fig.width=7.5, fig.height=3.5}
 # for some reason setting levels in global.R isnt translating to .Rmd
 #rr$Stressor <- factor(rr$Stressor,levels=c('Total Phosphorus','Streambed Sedimentation',
 #                                         'Cumulative Dissolved Metals','Total Nitrogen',
 #                                         'Ionic Strength','Habitat Disturbance'))
+# No DO/pH version
+# ggplot(rr,aes(Stressor,Estimate,fill=Subpopulation,label=Estimate))+
+#   geom_bar(stat='identity',width=.5)+
+#   theme(aspect.ratio=4/6)+
+#   labs(x="Stressor", y = "Relative Risk")+ylim(-0.1,10)+
+#   scale_x_discrete(breaks=unique(rr$Stressor),labels=addline_format(rr$Stressor))+
+#   coord_flip()+ geom_hline(yintercept=1,linetype = "longdash")+
+#   geom_text(aes(label=paste(format(Estimate,digits=1,nsmall=1)),vjust=-1,hjust=-0.2),size=3,family='Arial')+
+#   geom_errorbar(aes(ymin=Estimate - MoE, ymax=Estimate + MoE), width=0.2)+ # error bars
+#   theme_minimal()+scale_fill_manual(values=c("#D55E00"))+
+#   theme(legend.position="none")+ # no legend, center title
+#   theme( text=element_text(family="Arial"),
+#     panel.grid.major.x = element_blank(),panel.grid.minor = element_blank(),panel.background = element_blank(),
+#     axis.line = element_line(colour = "black"))+ # no background grid
+#   theme(plot.margin=unit(c(0,1,0,0),'cm'))
 
-ggplot(rr,aes(Stressor,Estimate,fill=Subpopulation,label=Estimate))+
+# rr$Stressor <- factor(rr$Stressor,levels=c('pH', 'Dissolved Oxygen', 'Total Phosphorus','Streambed Sedimentation',
+#                                         'Cumulative Dissolved Metals','Total Nitrogen',
+#                                         'Ionic Strength','Habitat Disturbance'))
+ggplot(rr,aes(Stressor,Estimate,fill=Standard,label=Estimate))+
   geom_bar(stat='identity',width=.5)+
   theme(aspect.ratio=4/6)+
   labs(x="Stressor", y = "Relative Risk")+ylim(-0.1,10)+
@@ -1438,25 +1469,27 @@ ggplot(rr,aes(Stressor,Estimate,fill=Subpopulation,label=Estimate))+
   coord_flip()+ geom_hline(yintercept=1,linetype = "longdash")+
   geom_text(aes(label=paste(format(Estimate,digits=1,nsmall=1)),vjust=-1,hjust=-0.2),size=3,family='Arial')+
   geom_errorbar(aes(ymin=Estimate - MoE, ymax=Estimate + MoE), width=0.2)+ # error bars
-  theme_minimal()+scale_fill_manual(values=c("#D55E00"))+
+  theme_minimal()+scale_fill_manual(values=c("#D55E00","#009E73"))+
   theme(legend.position="none")+ # no legend, center title
   theme( text=element_text(family="Arial"),
     panel.grid.major.x = element_blank(),panel.grid.minor = element_blank(),panel.background = element_blank(),
     axis.line = element_line(colour = "black"))+ # no background grid
   theme(plot.margin=unit(c(0,1,0,0),'cm'))
+
+
 ```
 
-##### Figure 4.4-26. Stressor extent for major benthic macroinvertebrate stressors in Virginia streams. The horizontal lines associated with the parameters illustrate the 95% confidence intervals. Stressor extent shows the frequency of the stressor in all Virginia streams from data collected for the `r IRyear` Integrated Report (`r IRrange`).
+##### Figure 4.4-26. Stressor extent for major benthic macroinvertebrate stressors in Virginia streams. The horizontal lines associated with the parameters illustrate the 95% confidence intervals. Orange bars indicate parameters with screening values only (no numeric water quality criteria or assessment thresholds) and green bars indicate parameters with numeric water quality criteria (pH, DO) or assessment thresholds. Stressor extent shows the frequency of the stressor in all Virginia streams from data collected for the `r IRyear` Integrated Report (`r IRrange`).
 
 ```{r, fig.width=7.5, fig.height=3.5}
-ggplot(stressorext,aes(Parameter,pct,fill=Condition,label=pct))+
+ggplot(stressorext,aes(Parameter,pct,fill=Standard,label=pct))+
   geom_bar(stat='identity',width=.5)+
   theme(aspect.ratio=4/6)+
   labs(x="Parameter", y = "Percent of Stream Miles")+ coord_flip()+ylim(-1,55)+
   scale_x_discrete(breaks=unique(stressorext$Parameter),labels=addline_format(stressorext$Parameter))+
   geom_text(aes(label=paste(format(pct,digits=1,nsmall=1),"% +/- ",format(MoE,digits=1,nsmall=1),"%",sep=""),y=52),size=3,family='Arial')+
   geom_errorbar(aes(ymin=pct-MoE, ymax=pct+MoE), width=0.2)+ # error bars
-  theme_minimal()+scale_fill_manual(values=c("#D55E00"))+
+  theme_minimal()+scale_fill_manual(values=c("#D55E00","#009E73"))+
   theme(legend.position="none",plot.title = element_text(hjust = 0.5))+ # no legend, center title
   theme( text=element_text(family="Arial"),
     panel.grid.major.x = element_blank(),

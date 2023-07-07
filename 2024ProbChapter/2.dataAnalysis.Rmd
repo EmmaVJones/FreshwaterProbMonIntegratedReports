@@ -20,7 +20,7 @@ library(magrittr)
 This document walks you through the steps of calculating design weights, running analyses, and writing the Integrated Report chapter for the Probabilistic Monitoring Program due to EPA every two years. This document overviews the 2024 IR ProbMon chapter.
 
 
-# Design Status
+# Survey Data
 
 Starting with an organized 'design status' database that has all Probmon stations (sampled or not) organized with stream order information. This data is important to note all sites that were evaluated and whether or not they should be included in the design weight process. Environmental, chemical, landcover, etc. data is organized in a separate spreadsheet (brought in later) that is joined to the weight category results. 
 
@@ -140,7 +140,8 @@ See 2.dataAnalysis_MetalsModule.Rmd
 After investgating each of the metals that exceeded in the riverine assessment app, here is a summary for the report to ingest.
 
 
-## CDF analyses
+
+## Design Status
 
 
 And now bring in design status data (for VSCI/VCPMI). It is best to use this as the default design status dataset (and adjust TS to OT if not sampled) because it is the most complete version of the data.
@@ -181,7 +182,9 @@ These are the data windows we are looking at for 2020 IR:
 
 
 
-## Functions for Weight Adjustments to run all CDF data by subpopulations
+## CDF Analyses
+
+### Functions for Weight Adjustments to run all CDF data by subpopulations
 
 The following functions run the CDF analyses for all parameters chosen from the surveyData dataframe (you can modify the selection to increase/decrease parameters run). The subpopEstimate() function runs each subpopulation and nests inside the listOfResults(), which outputs a list of all subpopulation results. The allCDFresults() **adjusts all weights according to sample window and handles all trend stations appropriately** and then calls the listOfResults() to run all the CDF, percentile, and population estimates for each subpopulation. See below for how to run each of these functions and how to view outputs.
 
@@ -340,7 +343,8 @@ rrisk$TDSstatus <- cut(rrisk$TDS, c(0,100,350,20000),labels=c('Good','Fair','Poo
 rrisk$MetalCCUstatus <- cut(rrisk$MetalCCU, c(0,1,2,100),labels=c('Good','Fair','Poor'))
 rrisk$LRBSstatus <- cut(rrisk$LRBS, c(-10,-1,-0.5,0.5,10),labels=c('Poor','Fair','Good','Fair2'))
 #extras
-rrisk$DOstatus <- cut(rrisk$DO,c(0,4,8,20),labels=c('Poor','Fair','Good'))  
+rrisk$DOstatus <- cut(rrisk$DO,c(0,4,20),labels=c('Poor','Good'))  
+#rrisk$DOstatus <- cut(rrisk$DO,c(0,4,8,20),labels=c('Poor','Fair','Good'))  
 rrisk$pHstatus <- cut(rrisk$pH,c(0,6,9,14),labels=c('Poor','Good','Poor'))  
 
 
@@ -422,7 +426,7 @@ relrisk.estimates<-relrisk.analysis(sites=sites.va.rr,subpop=subpop.va.rr,
 
 
 write.csv(relrisk.estimates, file = "processedData/relriskIR2024_withDOpH.csv", row.names = FALSE)
-write.csv(rrisk, file = "processedData/rrisk_withDOpH.csv.csv", row.names = FALSE)
+write.csv(rrisk, file = "processedData/rrisk_withDOpH.csv", row.names = FALSE)
 
 ```
 
