@@ -785,6 +785,65 @@ prob2022 <- read.csv('processedData/prob2022PoFix.csv') %>%
          '70331VFine' = 'X70331VFine')
 ```
 
+There seem to be some mislabeled Ecoregions and bay/nonbay metadata in legacy data. Fix that now!
+
+```{r}
+prob2022ecoBay <- prob2022 %>% 
+  left_join(pin_get('ejones/WQM-Stations-Spatial', board = 'rsconnect') %>%
+              filter(StationID %in% prob2022$StationID) %>% 
+              distinct(StationID, .keep_all = T) %>% 
+              dplyr::select(StationID, Basin, US_L3NAME, Basin_Code), 
+            by = 'StationID') %>% 
+  mutate(Basin = coalesce(Basin.y, Basin.x),
+         EcoRegion = coalesce(US_L3NAME, EcoRegion)) %>% 
+  #dplyr::select(Basin.x, Basin.y, Basin, everything())
+  mutate(Basin = case_when(Basin %in% c("James River Basin", "James" ) ~ "James",
+                           Basin %in% c("Roanoke River Basin" , "Roanoke") ~ "Roanoke",
+                           Basin %in% c( "New River Basin" , "New" ) ~ "New",
+                           Basin %in% c( "Potomac River Basin" , "Shenandoah River Basin", "Potomac-Shenandoah") ~ "Potomac-Shenandoah",
+                           Basin %in% c("Tennessee and Big Sandy River Basin", "Tennessee" ) ~  "Tennessee",
+                           Basin %in% c("Rappahannock River Basin", "York River Basin",  "Rappahannock-York") ~ "Rappahannock-York",
+                           Basin %in% c(  "Chowan and Dismal Swamp River Basin","Chowan"  ) ~   "Chowan" ,
+                           Basin %in% c('Ches. Bay and Small Coastal Basin') ~ 'Chesapeake Bay',
+                           TRUE ~ as.character(NA)),
+         EcoRegion = case_when(US_L3NAME %in% c("Ridge and Valley" ) ~ "Central Appalachian Ridges and Valleys",
+                               US_L3NAME %in% c("Blue Ridge" ) ~ "Blue Ridge Mountains",
+                               TRUE ~ as.character(US_L3NAME)),
+         SubBasin =  case_when(Basin_Code %in% c("James-Lower", "James-Middle", "James-Upper","Appomattox"  ) ~ "James",   
+                               Basin_Code %in% c("Roanoke", "Yadkin") ~ "Roanoke",
+                               Basin_Code %in% c( "New"  ) ~ "New",
+                               Basin_Code %in% c(  "Potomac-Lower") ~  "Potomac" ,
+                               Basin_Code%in% c("Potomac-Shenandoah") ~  "Shenandoah",
+                               Basin_Code %in% c("Rappahannock") ~ "Rappahannock",
+                               Basin_Code%in% c("York"  ) ~  "York" ,
+                               Basin_Code %in% c("Chowan-Dismal" ) ~ "Chowan",
+                               Basin_Code %in% c("Tennessee-Holston" ) ~  "Holston",
+                               Basin_Code  %in% c( "Tennessee-Clinch"  ) ~   "Clinch-Powell" ,
+                               Basin_Code  %in% c( "Tennessee-Big Sandy") ~  "Big Sandy",
+                               # hardly ever used "Cheasapeake Bay"
+                               TRUE ~ as.character(SubBasin)), # use old designation if the station doesnt have a record in teh pinned dataset(means it's not in CEDS)
+         BayShed = case_when(Basin %in% c("James","Rappahannock-York","Potomac-Shenandoah", 'Chesapeake Bay') ~ "Bay",
+                             TRUE ~ as.character("NonBay")),
+         BioRegion = case_when(EcoRegion %in% c("Middle Atlantic Coastal Plain", "Southeastern Plains") ~ "Coast",
+                               EcoRegion %in% c("Piedmont", "Northern Piedmont") ~ "Piedmont",
+                               TRUE ~ as.character('Mountain')),
+         BasinSize = case_when(AREA_SQ_MILES < 1 ~ 1,
+                               between(AREA_SQ_MILES, 1, 9.99999999) ~ 2, #between is >= and <= 
+                               between(AREA_SQ_MILES, 10, 49.9999999) ~ 3, #between is >= and <= 
+                               AREA_SQ_MILES >= 50 ~ 4,
+                               TRUE ~ as.numeric(NA)),
+         StreamSizeCat = case_when(BasinSize %in% c(1,2) ~ 'Small',
+                                   BasinSize == 3 ~ "Medium",
+                                   BasinSize == 4 ~ "Large",
+                                   TRUE ~ as.character(NA))) %>% 
+  dplyr::select(names(prob2022))
+
+prob2022 <- prob2022ecoBay
+```
+
+
+
+
 And the Jackson river site has issues. 2-JKS070.97
 
 ```{r}
@@ -846,8 +905,6 @@ stationMetadata <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virg
 
 
 
-### Hold on landcover until more solid
-
 Bring in landcover data
 
 ```{r landcover}
@@ -868,7 +925,7 @@ Smash data
 ```{r data smash}
 prob2022fin <- prob2022 %>% 
   mutate(IR2024 = as.numeric(NA)) %>% #placeholder
-  dplyr::select(DataSource:IR2022, IR2024, DO:STXRD )
+  dplyr::select(DataSource:IR2022, IR2024, DO:STXRD ) 
 #names(prob2020fin) # what to match
 
 finalSmash <- stationMetadata %>% #dplyr::select(WQM_Stations_Filter, DataSource:set) %>% 
@@ -927,6 +984,7 @@ finalSmashMetadata <- filter(finalSmash, ! StationID %in% previousInfoMetadata$S
                            Basin %in% c("Tennessee and Big Sandy River Basin" ) ~  "Tennessee",
                            Basin %in% c("Rappahannock River Basin", "York River Basin" ) ~ "Rappahannock-York",
                            Basin %in% c(  "Chowan and Dismal Swamp River Basin"  ) ~   "Chowan" ,
+                           Basin %in% c('Ches. Bay and Small Coastal Basin') ~ 'Chesapeake Bay',
                            TRUE ~ as.character(NA)),
          EcoRegion = case_when(US_L3NAME %in% c("Ridge and Valley" ) ~ "Central Appalachian Ridges and Valleys",
                                US_L3NAME %in% c("Blue Ridge" ) ~ "Blue Ridge Mountains",
@@ -944,9 +1002,11 @@ finalSmashMetadata <- filter(finalSmash, ! StationID %in% previousInfoMetadata$S
                                Basin_Code  %in% c( "Tennessee-Big Sandy") ~  "Big Sandy",
                                # hardly ever used "Cheasapeake Bay"
                                TRUE ~ as.character(NA)),
-         BayShed = case_when(Basin %in% c("James River Basin","Potomac River Basin" , "Shenandoah River Basin",
-                                          "Rappahannock River Basin", "York River Basin") ~ "Bay",
+         BayShed = case_when(Basin %in% c("James","Rappahannock-York","Potomac-Shenandoah", 'Chesapeake Bay') ~ "Bay",
                              TRUE ~ as.character("NonBay")),
+         # BayShed = case_when(Basin %in% c("James River Basin","Potomac River Basin" , "Shenandoah River Basin",
+         #                                  "Rappahannock River Basin", "York River Basin") ~ "Bay",
+         #                     TRUE ~ as.character("NonBay")),
          BioRegion = case_when(EcoRegion %in% c("Middle Atlantic Coastal Plain", "Southeastern Plains") ~ "Coast",
                                EcoRegion %in% c("Piedmont", "Northern Piedmont") ~ "Piedmont",
                                TRUE ~ as.character('Mountain')),
@@ -1175,7 +1235,7 @@ multiStationGIS_ViewAll <-  pool %>% tbl(in_schema("wqm",  "Wqm_Sta_GIS_View")) 
   dplyr::select(Station_Id, Longitude, Latitude)
 
 sitesNotInCEDS <- tribble(
-  ~StationID,  ~Longitude, ~Latitude,
+  ~Station_Id,  ~Longitude, ~Latitude,
   '5ANTW045.12',	-77.190038, 	36.866562,
   '6CSLM002.11',	-81.407864,	36.809949,
   '2-RVN035.67',	-78.4155,	38.008844,
@@ -1186,16 +1246,20 @@ sitesNotInCEDS <- tribble(
   '9-LFK005.39',	-81.171301,	37.243087,
   '4AXUY000.58', -78.8769987,	36.64839836,
   '4AROC010.68',	-78.56410796,	37.1086978,
-  '9-BST069.21',	-81.28267087,	37.2601764)
+  '9-BST069.21',	-81.28267087,	37.2601764,
+  '3-JOA002.68', -77.90597222,	38.494275,
+  '2BFSP001.09', -78.654028,	37.366806,
+  '1AXLN000.27', -77.520753,	38.490531,
+  '2BMBB000.60', -78.7752,	37.519419
+)
 
 multiStationGIS_ViewAll <- bind_rows(multiStationGIS_ViewAll, sitesNotInCEDS)
 
 prob2024fin2 <- left_join(prob2024fin, multiStationGIS_ViewAll, by = c('StationID' = 'Station_Id')) %>% 
   mutate(LatitudeDD = Latitude,
          LongitudeDD = Longitude) %>% 
-  dplyr::select(-c(Latitude, Longitude)) %>% 
-  # fix known issues
-  m
+  #dplyr::select(Latitude, Longitude, everything())
+  dplyr::select(-c(Latitude, Longitude))
   
 names(prob2024fin2) ==names(prob2024fin)
 
@@ -1259,6 +1323,25 @@ We also need to update the design status window information to match the new win
 
 ```{r}
 designStatusOld <- read.csv('originalData/designStatusIR2022_EVJyearFixes.csv') %>% 
+  mutate(sampleID = case_when(sampleID == '1AQUA004.14'~'1AQUA004.35',
+                              sampleID == '2-JKS070.97' ~ '2-JKS063.03',
+                              TRUE ~ as.character(sampleID)))
+  
+designStatusOld <- designStatusOld %>% 
+  # use fixed metadata from above
+  left_join(dplyr::select(prob2024fin, StationID_Trend, Basin:BioRegion),
+            by = c('sampleID'='StationID_Trend')) %>% 
+  mutate(Basin = coalesce(Basin.y, Basin.x),
+         SubBasin = coalesce(SubBasin.y, SubBasin.x), 
+         VAHUSB = coalesce(VAHUSB.y, VAHUSB.x),
+         VAHUSB_NAME = coalesce(VAHUSB_NAME.y, VAHUSB_NAME.x),
+         BayShed = coalesce(BayShed.y, BayShed.x),
+         BayPanel = coalesce(BayPanel.y, BayPanel.x), 
+         EcoRegion = coalesce(EcoRegion.y, EcoRegion.x), 
+         BioRegion = coalesce(BioRegion.y, BioRegion.x)) %>% 
+  dplyr::select(names(designStatusOld)) %>% 
+         
+  
   mutate(Station_Id = as.character(Station_Id),
          Station_Id = na_if(Station_Id, "")) %>%  
   left_join(dplyr::select(prob2024fin, StationID_Trend, AREA_SQ_MILES),
@@ -1302,7 +1385,7 @@ designStatusOld <- read.csv('originalData/designStatusIR2022_EVJyearFixes.csv') 
   mutate(designweight = case_when(sampleID %in% c('1AXMJ000.42_2012', '1AXMJ000.42_2014', '1AXMJ000.42_2016')~ 947.62919999999997,
                                   TRUE ~ as.numeric(designweight))) %>% 
   mutate(sampleID = case_when(sampleID == '2-JKS070.97' ~ '2-JKS063.03',
-                              TRUE = as.character(sampleID)))
+                              TRUE ~ as.character(sampleID)))
 
 
 
@@ -1332,10 +1415,10 @@ designStatusNew <- read_excel('C:/Users/wmu43954/OneDrive - Commonwealth of Virg
 
 
 # smash together in this order so the station count is correct
-designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS'),
-                             filter(designStatusNew, status == 'TS'),
-                             filter(designStatusOld, status != 'TS'),
-                             filter(designStatusNew, status != 'TS')) %>% 
+designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS') %>% arrange(Year),
+                             filter(designStatusNew, status == 'TS') %>% arrange(Year),
+                             filter(designStatusOld, status != 'TS') %>% arrange(Year),
+                             filter(designStatusNew, status != 'TS') %>% arrange(Year)) %>% 
   mutate(station = 1:n()) %>% 
   dplyr::select(names(designStatusOld), IR2024)
 
@@ -1344,4 +1427,3 @@ designStatusFin <- bind_rows(filter(designStatusOld, status == 'TS'),
 ```
 
 
-had to manually change BasinSize for 1AQUA004.35 and 2-JKS063.03 to 3,4 bc missing after manual QA in design status
